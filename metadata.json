@@ -1,0 +1,6 @@
+{
+  "name": "سراج للصرافة - Seraj Exchange",
+  "description": "نظام احترافي لإدارة مراكز الصرافة والتحويلات المالية الداخلية، تتبع أسعار الصرف، وتسوية الحسابات بين الفروع.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["FINANCIAL_MANAGEMENT", "REAL_TIME_TRANSFERS"]
+}

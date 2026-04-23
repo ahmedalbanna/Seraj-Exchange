@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function getUserData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isAdmin() { return isVerified() && getUserData().role == 'admin'; }
+    function isManager() { return isVerified() && (getUserData().role == 'manager' || getUserData().role == 'admin'); }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // --- Validation Helpers ---
+    function isValidExchangeRate(data) {
+      return data.keys().hasAll(['baseCurrency', 'targetCurrency', 'officialRate', 'marketRate', 'date', 'updatedBy'])
+        && data.keys().size() == 6
+        && data.baseCurrency is string && data.baseCurrency.size() == 3
+        && data.targetCurrency is string && data.targetCurrency.size() == 3
+        && data.officialRate is number && data.officialRate > 0
+        && data.marketRate is number && data.marketRate > 0
+        && data.updatedBy == request.auth.uid
+        && data.date == request.time;
+    }
+
+    function isValidTransfer(data) {
+      return data.keys().hasAll(['senderName', 'receiverName', 'amount', 'currency', 'fromBranchId', 'toBranchId', 'status', 'issuedAt', 'issuedBy'])
+        && data.senderName is string && data.senderName.size() > 0 && data.senderName.size() < 100
+        && data.receiverName is string && data.receiverName.size() > 0 && data.receiverName.size() < 100
+        && data.amount is number && data.amount > 0
+        && data.status in ['pending', 'received', 'cancelled']
+        && data.issuedBy == request.auth.uid
+        && data.issuedAt == request.time
+        && isValidId(data.fromBranchId)
+        && isValidId(data.toBranchId);
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isVerified() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerified() && userId == request.auth.uid && incoming().role == 'clerk'; // Self-reg as clerk
+      allow update: if isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'branchId']);
+    }
+
+    match /exchange_rates/{rateId} {
+      allow read: if isVerified();
+      allow create: if isManager() && isValidExchangeRate(incoming());
+      allow update: if false; // Rates should be historical/immutable
+    }
+
+    match /branches/{branchId} {
+      allow read: if isVerified();
+      allow write: if isAdmin();
+    }
+
+    match /transfers/{transferId} {
+      allow get: if isVerified() && (
+        getUserData().branchId == existing().fromBranchId || 
+        getUserData().branchId == existing().toBranchId || 
+        isAdmin()
+      );
+      allow list: if isVerified() && (
+        resource.data.fromBranchId == getUserData().branchId || 
+        resource.data.toBranchId == getUserData().branchId || 
+        isAdmin()
+      );
+      
+      allow create: if isVerified() && isValidTransfer(incoming()) && (
+        getUserData().branchId == incoming().fromBranchId || isAdmin()
+      );
+
+      allow update: if isVerified() && (
+        // Action: Receive (Only receiver branch can do this)
+        (
+          existing().status == 'pending' &&
+          incoming().status == 'received' &&
+          getUserData().branchId == existing().toBranchId &&
+          incoming().receivedBy == request.auth.uid &&
+          incoming().receivedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'receivedBy', 'receivedAt'])
+        ) ||
+        // Action: Cancel (Only sender branch can do this before it's received)
+        (
+          existing().status == 'pending' &&
+          incoming().status == 'cancelled' &&
+          getUserData().branchId == existing().fromBranchId &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status'])
+        )
+      );
+    }
+  }
+}

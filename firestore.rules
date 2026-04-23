@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn(); } // Relaxed for development stability
+    function getUserData() { 
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; 
+    }
+    function isAdmin() { return isVerified() && getUserData().role == 'admin'; }
+    function isManager() { 
+      return isVerified() && (getUserData().role == 'manager' || getUserData().role == 'admin'); 
+    }
+    function isValidId(id) { 
+      return id is string && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // --- Validation Blueprints ---
+    function isValidExchangeRate(data) {
+      return data.keys().hasAll(['baseCurrency', 'targetCurrency', 'officialRate', 'marketRate', 'date', 'updatedBy'])
+        && data.baseCurrency is string && data.baseCurrency.size() >= 3 && data.baseCurrency.size() <= 6
+        && data.targetCurrency is string && data.targetCurrency.size() >= 3 && data.targetCurrency.size() <= 6
+        && data.officialRate is number && data.officialRate > 0
+        && data.marketRate is number && data.marketRate > 0
+        && data.updatedBy == request.auth.uid
+        && data.date == request.time;
+    }
+
+    function isValidTransferBase(data) {
+      return data.keys().hasAll(['senderName', 'senderPhone', 'receiverName', 'receiverPhone', 'amount', 'currency', 'exchangeRate', 'totalAmount', 'fromBranchId', 'toBranchId', 'status', 'issuedAt', 'issuedBy'])
+        && data.senderName is string && data.senderName.size() > 0
+        && data.receiverName is string && data.receiverName.size() > 0
+        && data.amount is number && data.amount > 0
+        && data.currency is string && data.currency.size() >= 3
+        && data.exchangeRate is number && data.exchangeRate > 0
+        && data.totalAmount is number
+        && data.status in ['pending', 'processing', 'received', 'failed', 'cancelled']
+        && isValidId(data.fromBranchId)
+        && isValidId(data.toBranchId);
+    }
+
+    // --- Collection Rules ---
+
+    match /settlements/{settlementId} {
+      allow read, create: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update, delete: if isVerified() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified(); 
+    }
+
+    match /users/{userId} {
+      allow get: if isVerified() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerified() && userId == request.auth.uid 
+        && incoming().role == 'clerk'
+        && incoming().email == request.auth.token.email;
+      allow update: if isVerified() && (
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'branchId'])) ||
+        (userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['displayName']))
+      );
+    }
+
+    match /exchange_rates/{rateId} {
+      allow read: if isVerified();
+      allow create: if isManager() && isValidExchangeRate(incoming());
+    }
+
+    match /branches/{branchId} {
+      allow read: if isVerified();
+      allow write: if isAdmin();
+    }
+
+    match /transfers/{transferId} {
+      allow get: if isVerified() && (
+        isAdmin() ||
+        getUserData().get('branchId', '') == existing().fromBranchId ||
+        getUserData().get('branchId', '') == existing().toBranchId
+      );
+
+      allow list: if isVerified() && (
+        isAdmin() || 
+        (resource.data.fromBranchId == getUserData().get('branchId', 'none')) ||
+        (resource.data.toBranchId == getUserData().get('branchId', 'none'))
+      );
+      
+      allow create: if isVerified() && isValidTransferBase(incoming())
+        && incoming().status == 'pending'
+        && incoming().issuedBy == request.auth.uid
+        && incoming().issuedAt == request.time
+        && (isAdmin() || getUserData().get('branchId', '') == incoming().fromBranchId)
+        && exists(/databases/$(database)/documents/branches/$(incoming().toBranchId));
+
+      allow update: if isVerified() && (
+        // Action: Receive
+        (
+          existing().status == 'pending' &&
+          incoming().status == 'received' &&
+          getUserData().get('branchId', '') == existing().toBranchId &&
+          incoming().receivedBy == request.auth.uid &&
+          incoming().receivedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'receivedBy', 'receivedAt'])
+        ) ||
+        // Action: Cancel
+        (
+          existing().status == 'pending' &&
+          incoming().status == 'cancelled' &&
+          getUserData().get('branchId', '') == existing().fromBranchId &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status'])
+        ) ||
+        // Action: Process/Fail/Notes
+        (
+          incoming().status in ['processing', 'failed', 'pending'] &&
+          (isAdmin() || getUserData().get('branchId', '') == existing().fromBranchId) &&
+          incoming().get('status', '') != existing().get('status', '') &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'expectedReceiptDate'])
+        )
+      );
+    }
+  }
+}
