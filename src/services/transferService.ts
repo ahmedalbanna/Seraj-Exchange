@@ -63,11 +63,11 @@ export const transferService = {
     }
   },
 
-  subscribeToBranchTransfers: (branchId: string, isAdmin: boolean, callback: (transfers: Transfer[]) => void) => {
+  subscribeToBranchTransfers: (branchId: string, isAdministrator: boolean, isSupervisor: boolean, callback: (transfers: Transfer[]) => void) => {
     const transfersRef = collection(db, 'transfers');
     
     let q;
-    if (isAdmin) {
+    if (isAdministrator || isSupervisor) {
       q = query(transfersRef, orderBy('issuedAt', 'desc'));
     } else {
       q = query(

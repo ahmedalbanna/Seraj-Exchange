@@ -21,7 +21,7 @@ import { ar } from 'date-fns/locale';
 
 export default function Reconciliation() {
   const { t } = useConfig();
-  const { isAdmin, profile } = useAuth();
+  const { isAdministrator, isSupervisor, profile } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +38,7 @@ export default function Reconciliation() {
   });
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdministrator && !isSupervisor) return;
     const unsubBranches = branchService.subscribeToBranches(setBranches);
     const unsubSettlements = settlementService.subscribeToSettlements(setSettlements);
     setLoading(false);
@@ -46,7 +46,7 @@ export default function Reconciliation() {
       unsubBranches();
       unsubSettlements();
     };
-  }, [isAdmin]);
+  }, [isAdministrator, isSupervisor]);
 
   const fetchOutstanding = async () => {
     if (sourceBranch && targetBranch) {
@@ -90,7 +90,7 @@ export default function Reconciliation() {
     fetchOutstanding();
   };
 
-  if (!isAdmin) return <Navigate to="/" />;
+  if (!isAdministrator && !isSupervisor) return <Navigate to="/" />;
 
   return (
     <div className="space-y-8 pb-12">

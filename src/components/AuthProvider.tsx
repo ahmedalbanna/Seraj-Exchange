@@ -8,10 +8,12 @@ interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
-  isAdmin: boolean;
+  isAdministrator: boolean;
+  isSupervisor: boolean;
+  isTeller: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, profile: null, loading: true, isAdmin: false });
+const AuthContext = createContext<AuthContextType>({ user: null, profile: null, loading: true, isAdministrator: false, isSupervisor: false, isTeller: false });
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -30,12 +32,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (profileSnap.exists()) {
           setProfile(profileSnap.data() as UserProfile);
         } else {
-          // Self-register as clerk if no profile exists
+          // Self-register as Teller if no profile exists
           const newProfile: UserProfile = {
             uid: user.uid,
             email: user.email!,
             displayName: user.displayName,
-            role: 'clerk',
+            role: 'Teller',
             branchId: 'main' // Default to main branch to avoid undefined errors
           };
           await setDoc(profileRef, newProfile);
@@ -51,10 +53,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const isAdmin = profile?.role === 'admin';
+  const isAdministrator = profile?.role === 'Administrator';
+  const isSupervisor = profile?.role === 'Supervisor';
+  const isTeller = profile?.role === 'Teller';
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin }}>
+    <AuthContext.Provider value={{ user, profile, loading, isAdministrator, isSupervisor, isTeller }}>
       {children}
     </AuthContext.Provider>
   );

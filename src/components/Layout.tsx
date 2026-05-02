@@ -24,7 +24,7 @@ import NotificationCenter from './NotificationCenter';
 
 export default function Layout() {
   const { t, lang, setLang, theme, setTheme } = useConfig();
-  const { profile } = useAuth();
+  const { profile, isAdministrator, isSupervisor } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -33,9 +33,11 @@ export default function Layout() {
     { id: 'dashboard', path: '/', label: t('dashboard'), icon: LayoutDashboard },
     { id: 'transfers', path: '/transfers', label: t('transfers'), icon: ArrowLeftRight },
     { id: 'rates', path: '/rates', label: t('exchange_rates'), icon: TrendingUp },
-    ...(profile?.role === 'admin' ? [
+    ...(isAdministrator ? [
       { id: 'branches', path: '/branches', label: 'إدارة الفروع', icon: Building2 },
       { id: 'users', path: '/users', label: 'المخدمين', icon: UsersIcon },
+    ] : []),
+    ...(isAdministrator || isSupervisor ? [
       { id: 'reconciliation', path: '/reconciliation', label: 'التسويات المالية', icon: Scale },
     ] : [])
   ];

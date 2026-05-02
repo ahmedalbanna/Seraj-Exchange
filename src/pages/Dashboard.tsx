@@ -27,7 +27,7 @@ import {
 
 export default function Dashboard() {
   const { t, lang } = useConfig();
-  const { profile, isAdmin } = useAuth();
+  const { profile, isAdministrator, isSupervisor } = useAuth();
   const [stats, setStats] = useState({ total_sent: 0, total_received: 0, pending: 0, daily_avg: 0 });
   const [recentTransfers, setRecentTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ export default function Dashboard() {
         const transfersRef = collection(db, 'transfers');
         let q;
         
-        if (isAdmin) {
+        if (isAdministrator || isSupervisor) {
           q = query(transfersRef, orderBy('issuedAt', 'desc'), limit(5));
         } else if (profile.branchId) {
           q = query(
@@ -75,7 +75,7 @@ export default function Dashboard() {
     }
 
     fetchStats();
-  }, [profile, isAdmin]);
+  }, [profile, isAdministrator, isSupervisor]);
 
   const chartData = [
     { name: '01/04', value: 4000 },

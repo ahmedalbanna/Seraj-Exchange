@@ -18,14 +18,14 @@ import { cn } from '../lib/utils';
 
 export default function Users() {
   const { t } = useConfig();
-  const { isAdmin } = useAuth();
+  const { isAdministrator } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdministrator) return;
     const unsubUsers = userService.subscribeToUsers(setUsers);
     const unsubBranches = branchService.subscribeToBranches((data) => {
       setBranches(data);
@@ -35,9 +35,9 @@ export default function Users() {
       unsubUsers();
       unsubBranches();
     };
-  }, [isAdmin]);
+  }, [isAdministrator]);
 
-  if (!isAdmin) return <Navigate to="/" />;
+  if (!isAdministrator) return <Navigate to="/" />;
 
   const handleUpdateUser = async (userId: string, role: UserRole, branchId: string) => {
     try {
@@ -48,11 +48,11 @@ export default function Users() {
     }
   };
 
-  const RoleBadge = ({ role }: { role: UserRole }) => {
-    const config = {
-      admin: "bg-rose-500/10 text-rose-500 border-rose-500/20",
-      manager: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-      clerk: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  const RoleBadge = ({ role }: { role: string }) => {
+    const config: Record<string, string> = {
+      Administrator: "bg-rose-500/10 text-rose-500 border-rose-500/20",
+      Supervisor: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+      Teller: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     };
     return (
       <span className={cn("px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border", config[role])}>
@@ -155,7 +155,7 @@ export default function Users() {
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest">اختيار الدور</label>
                     <div className="grid grid-cols-3 gap-3">
-                      {(['admin', 'manager', 'clerk'] as UserRole[]).map(r => (
+                      {(['Administrator', 'Supervisor', 'Teller'] as UserRole[]).map(r => (
                         <button
                           key={r}
                           onClick={() => setEditingUser({...editingUser, role: r})}

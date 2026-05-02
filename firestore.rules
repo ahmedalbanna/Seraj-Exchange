@@ -12,9 +12,9 @@ service cloud.firestore {
     function getUserData() { 
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; 
     }
-    function isAdmin() { return isVerified() && getUserData().role == 'admin'; }
-    function isManager() { 
-      return isVerified() && (getUserData().role == 'manager' || getUserData().role == 'admin'); 
+    function isAdministrator() { return isVerified() && getUserData().role == 'Administrator'; }
+    function isSupervisor() { 
+      return isVerified() && (getUserData().role == 'Supervisor' || getUserData().role == 'Administrator'); 
     }
     function isValidId(id) { 
       return id is string && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
@@ -49,7 +49,7 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     match /settlements/{settlementId} {
-      allow read, create: if isAdmin();
+      allow read, create: if isAdministrator() || isSupervisor();
     }
 
     match /notifications/{notificationId} {
@@ -58,36 +58,38 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if isVerified() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
+      allow get: if isVerified() && (request.auth.uid == userId || isAdministrator());
+      allow list: if isAdministrator();
       allow create: if isVerified() && userId == request.auth.uid 
-        && incoming().role == 'clerk'
+        && incoming().role == 'Teller'
         && incoming().email == request.auth.token.email;
       allow update: if isVerified() && (
-        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'branchId'])) ||
+        (isAdministrator() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'branchId'])) ||
         (userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['displayName']))
       );
     }
 
     match /exchange_rates/{rateId} {
       allow read: if isVerified();
-      allow create: if isManager() && isValidExchangeRate(incoming());
+      allow create: if isSupervisor() && isValidExchangeRate(incoming());
     }
 
     match /branches/{branchId} {
       allow read: if isVerified();
-      allow write: if isAdmin();
+      allow write: if isAdministrator();
     }
 
     match /transfers/{transferId} {
       allow get: if isVerified() && (
-        isAdmin() ||
+        isAdministrator() ||
+        isSupervisor() ||
         getUserData().get('branchId', '') == existing().fromBranchId ||
         getUserData().get('branchId', '') == existing().toBranchId
       );
 
       allow list: if isVerified() && (
-        isAdmin() || 
+        isAdministrator() || 
+        isSupervisor() ||
         (resource.data.fromBranchId == getUserData().get('branchId', 'none')) ||
         (resource.data.toBranchId == getUserData().get('branchId', 'none'))
       );
@@ -96,11 +98,11 @@ service cloud.firestore {
         && incoming().status == 'pending'
         && incoming().issuedBy == request.auth.uid
         && incoming().issuedAt == request.time
-        && (isAdmin() || getUserData().get('branchId', '') == incoming().fromBranchId)
+        && (isAdministrator() || isSupervisor() || getUserData().get('branchId', '') == incoming().fromBranchId)
         && exists(/databases/$(database)/documents/branches/$(incoming().toBranchId));
 
       allow update: if isVerified() && (
-        // Action: Receive
+        // Action: Receive (Supervisor can approve/receive, Teller could maybe too if at branch)
         (
           existing().status == 'pending' &&
           incoming().status == 'received' &&
@@ -119,7 +121,7 @@ service cloud.firestore {
         // Action: Process/Fail/Notes
         (
           incoming().status in ['processing', 'failed', 'pending'] &&
-          (isAdmin() || getUserData().get('branchId', '') == existing().fromBranchId) &&
+          (isAdministrator() || isSupervisor() || getUserData().get('branchId', '') == existing().fromBranchId) &&
           incoming().get('status', '') != existing().get('status', '') &&
           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'expectedReceiptDate'])
         )

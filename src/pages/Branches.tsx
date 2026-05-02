@@ -12,20 +12,20 @@ import { Navigate } from 'react-router-dom';
 
 export default function Branches() {
   const { t } = useConfig();
-  const { isAdmin } = useAuth();
+  const { isAdministrator } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdministrator) return;
     const unsubscribe = branchService.subscribeToBranches((data) => {
       setBranches(data);
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [isAdmin]);
+  }, [isAdministrator]);
 
-  if (!isAdmin) return <Navigate to="/" />;
+  if (!isAdministrator) return <Navigate to="/" />;
 
   return (
     <div className="space-y-6">

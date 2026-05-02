@@ -21,7 +21,7 @@ import { branchService } from '../services/branchService';
 
 export default function Transfers() {
   const { t } = useConfig();
-  const { profile, isAdmin } = useAuth();
+  const { profile, isAdministrator, isSupervisor } = useAuth();
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +49,8 @@ export default function Transfers() {
     setLoading(true);
     const unsubscribe = transferService.subscribeToBranchTransfers(
       profile.branchId || '', 
-      isAdmin, 
+      isAdministrator, 
+      isSupervisor,
       (data) => {
         setTransfers(data);
         setLoading(false);
@@ -62,7 +63,7 @@ export default function Transfers() {
       unsubscribe();
       branchesUnsub();
     };
-  }, [profile, isAdmin]);
+  }, [profile, isAdministrator, isSupervisor]);
 
   const filteredTransfers = transfers.filter(t => {
     const matchesStatus = filters.status === 'all' || t.status === filters.status;
