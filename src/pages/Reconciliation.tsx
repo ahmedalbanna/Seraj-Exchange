@@ -76,7 +76,7 @@ export default function Reconciliation() {
       settledAmount: settlementForm.amount * settlementForm.rate,
       settledBy: profile.uid,
       transferIds: [], // In a real system, we'd link specific transfers
-    });
+    }, profile.uid);
 
     // Notify target branch about the settlement
     notificationService.sendToBranchManagers(targetBranch, {

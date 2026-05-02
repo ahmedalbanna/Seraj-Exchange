@@ -74,6 +74,13 @@ service cloud.firestore {
       allow write: if isAdministrator() || isSupervisor();
     }
 
+    match /audit_logs/{logId} {
+      allow read: if isAdministrator() || isSupervisor();
+      // Allow creation during batch writes
+      allow create: if isVerified() && incoming().userId == request.auth.uid;
+      allow update, delete: if false; // Immutable
+    }
+
     match /exchange_rates/{rateId} {
       allow read: if isVerified();
       allow create: if isSupervisor() && isValidExchangeRate(incoming());

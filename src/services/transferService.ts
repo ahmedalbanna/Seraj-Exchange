@@ -1,13 +1,13 @@
 import { 
   collection, 
-  addDoc, 
-  updateDoc, 
   doc, 
   query, 
   where, 
   orderBy, 
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  writeBatch,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Transfer } from '../types';
@@ -16,48 +16,128 @@ import { handleFirestoreError } from './errorService';
 export const transferService = {
   create: async (transfer: Omit<Transfer, 'issuedAt' | 'issuedBy' | 'status'>, userId: string) => {
     try {
-      const docRef = await addDoc(collection(db, 'transfers'), {
+      const batch = writeBatch(db);
+      
+      const transferRef = doc(collection(db, 'transfers'));
+      batch.set(transferRef, {
         ...transfer,
         status: 'pending',
         issuedBy: userId,
         issuedAt: serverTimestamp(),
       });
-      return docRef.id;
+      
+      const auditRef = doc(collection(db, 'audit_logs'));
+      batch.set(auditRef, {
+        action: 'TRANSFER_CREATED',
+        entityId: transferRef.id,
+        entityType: 'transfer',
+        amount: transfer.amount,
+        currency: transfer.currency,
+        exchangeRate: transfer.exchangeRate,
+        senderDetails: {
+          name: transfer.senderName,
+          phone: transfer.senderPhone
+        },
+        receiverDetails: {
+          name: transfer.receiverName,
+          phone: transfer.receiverPhone
+        },
+        userId,
+        timestamp: serverTimestamp(),
+      });
+      
+      await batch.commit();
+      return transferRef.id;
     } catch (error) {
       handleFirestoreError(error, 'create', 'transfers');
     }
   },
 
-  receive: async (transferId: string, userId: string) => {
+  receive: async (transferId: string, userId: string, transferData: Transfer) => {
     try {
-      const docRef = doc(db, 'transfers', transferId);
-      await updateDoc(docRef, {
+      const batch = writeBatch(db);
+      
+      const transferRef = doc(db, 'transfers', transferId);
+      batch.update(transferRef, {
         status: 'received',
         receivedBy: userId,
         receivedAt: serverTimestamp(),
       });
+      
+      const auditRef = doc(collection(db, 'audit_logs'));
+      batch.set(auditRef, {
+        action: 'TRANSFER_RECEIVED',
+        entityId: transferId,
+        entityType: 'transfer',
+        amount: transferData.amount,
+        currency: transferData.currency,
+        exchangeRate: transferData.exchangeRate,
+        senderDetails: {
+          name: transferData.senderName,
+          phone: transferData.senderPhone
+        },
+        receiverDetails: {
+          name: transferData.receiverName,
+          phone: transferData.receiverPhone
+        },
+        userId,
+        timestamp: serverTimestamp(),
+      });
+      
+      await batch.commit();
     } catch (error) {
       handleFirestoreError(error, 'update', `transfers/${transferId}`);
     }
   },
 
-  updateStatus: async (transferId: string, status: TransferStatus, notes?: string) => {
+  updateStatus: async (transferId: string, status: TransferStatus, notes: string | undefined, userId: string, transferData: Transfer) => {
     try {
+      const batch = writeBatch(db);
+      
       const docRef = doc(db, 'transfers', transferId);
       const updates: any = { status };
       if (notes !== undefined) updates.notes = notes;
-      await updateDoc(docRef, updates);
+      batch.update(docRef, updates);
+      
+      const auditRef = doc(collection(db, 'audit_logs'));
+      batch.set(auditRef, {
+        action: `TRANSFER_STATUS_CHANGED_${status.toUpperCase()}`,
+        entityId: transferId,
+        entityType: 'transfer',
+        amount: transferData.amount,
+        currency: transferData.currency,
+        exchangeRate: transferData.exchangeRate,
+        details: { notes },
+        userId,
+        timestamp: serverTimestamp(),
+      });
+      
+      await batch.commit();
     } catch (error) {
       handleFirestoreError(error, 'update', `transfers/${transferId}`);
     }
   },
 
-  cancel: async (transferId: string) => {
+  cancel: async (transferId: string, userId: string, transferData: Transfer) => {
     try {
+      const batch = writeBatch(db);
+      
       const docRef = doc(db, 'transfers', transferId);
-      await updateDoc(docRef, {
-        status: 'cancelled',
+      batch.update(docRef, { status: 'cancelled' });
+      
+      const auditRef = doc(collection(db, 'audit_logs'));
+      batch.set(auditRef, {
+        action: 'TRANSFER_CANCELLED',
+        entityId: transferId,
+        entityType: 'transfer',
+        amount: transferData.amount,
+        currency: transferData.currency,
+        exchangeRate: transferData.exchangeRate,
+        userId,
+        timestamp: serverTimestamp(),
       });
+      
+      await batch.commit();
     } catch (error) {
       handleFirestoreError(error, 'update', `transfers/${transferId}`);
     }

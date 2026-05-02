@@ -81,3 +81,18 @@ export interface Notification {
   createdAt: any;
   link?: string;
 }
+
+export interface AuditLog {
+  id?: string;
+  action: string;
+  entityId: string;
+  entityType: 'transfer' | 'settlement';
+  amount: number;
+  currency: string;
+  exchangeRate?: number;
+  senderDetails?: any;
+  receiverDetails?: any;
+  userId: string;
+  timestamp: any;
+  details?: any;
+}

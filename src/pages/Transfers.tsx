@@ -112,9 +112,9 @@ export default function Transfers() {
     setNewTransfer({ currency: 'USD', amount: 0, exchangeRate: 1 });
   };
 
-  const handleReceive = async (id: string) => {
+  const handleReceive = async (transfer: Transfer) => {
     if (!profile) return;
-    await transferService.receive(id, profile.uid);
+    await transferService.receive(transfer.id!, profile.uid, transfer);
   };
 
   const StatusBadge = ({ status }: { status: string }) => {
@@ -241,7 +241,7 @@ export default function Transfers() {
                   <td className="px-6 py-5">
                     {transfer.status === 'pending' && profile?.branchId === transfer.toBranchId && (
                       <button 
-                        onClick={() => handleReceive(transfer.id!)}
+                        onClick={() => handleReceive(transfer)}
                         className="text-[10px] font-bold bg-emerald-600/90 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 active:scale-95"
                       >
                         تأكيد الاستلام

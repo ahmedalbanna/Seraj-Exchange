@@ -9,6 +9,7 @@ import ExchangeRates from './pages/ExchangeRates';
 import Branches from './pages/Branches';
 import Users from './pages/Users';
 import Reconciliation from './pages/Reconciliation';
+import AuditLogs from './pages/AuditLogs';
 import Login from './pages/Login';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="branches" element={<Branches />} />
               <Route path="users" element={<Users />} />
               <Route path="reconciliation" element={<Reconciliation />} />
+              <Route path="audit-logs" element={<AuditLogs />} />
             </Route>
           </Routes>
         </BrowserRouter>

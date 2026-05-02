@@ -1,24 +1,47 @@
 import { 
   collection, 
-  addDoc, 
+  doc, 
   getDocs, 
   query, 
   where, 
   serverTimestamp,
-  onSnapshot
+  onSnapshot,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Settlement, Transfer } from '../types';
 import { handleFirestoreError } from './errorService';
 
 export const settlementService = {
-  createSettlement: async (settlement: Omit<Settlement, 'settledAt' | 'status'>) => {
+  createSettlement: async (settlement: Omit<Settlement, 'settledAt' | 'status'>, userId: string) => {
     try {
-      await addDoc(collection(db, 'settlements'), {
+      const batch = writeBatch(db);
+      
+      const settlementRef = doc(collection(db, 'settlements'));
+      batch.set(settlementRef, {
         ...settlement,
         status: 'completed',
         settledAt: serverTimestamp(),
       });
+      
+      const auditRef = doc(collection(db, 'audit_logs'));
+      batch.set(auditRef, {
+        action: 'SETTLEMENT_CREATED',
+        entityId: settlementRef.id,
+        entityType: 'settlement',
+        amount: settlement.amount,
+        currency: settlement.currency,
+        exchangeRate: settlement.appliedRate,
+        details: {
+          fromBranchId: settlement.fromBranchId,
+          toBranchId: settlement.toBranchId,
+          settledAmount: settlement.settledAmount,
+        },
+        userId,
+        timestamp: serverTimestamp(),
+      });
+      
+      await batch.commit();
     } catch (error) {
       handleFirestoreError(error, 'create', 'settlements');
     }

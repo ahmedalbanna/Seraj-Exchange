@@ -15,7 +15,8 @@ import {
   Languages,
   Building2,
   Users as UsersIcon,
-  Scale
+  Scale,
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -39,6 +40,7 @@ export default function Layout() {
     ] : []),
     ...(isAdministrator || isSupervisor ? [
       { id: 'reconciliation', path: '/reconciliation', label: 'التسويات المالية', icon: Scale },
+      { id: 'audit-logs', path: '/audit-logs', label: 'سجل التدقيق', icon: ShieldAlert },
     ] : [])
   ];
 
