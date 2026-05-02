@@ -53,16 +53,22 @@ export const transferService = {
     }
   },
 
-  receive: async (transferId: string, userId: string, transferData: Transfer) => {
+  receive: async (transferId: string, userId: string, transferData: Transfer, receiveDetails?: { receiverIdType: string, receiverIdNumber: string, notes: string }) => {
     try {
       const batch = writeBatch(db);
       
       const transferRef = doc(db, 'transfers', transferId);
-      batch.update(transferRef, {
+      const updates: Record<string, unknown> = {
         status: 'received',
         receivedBy: userId,
         receivedAt: serverTimestamp(),
-      });
+      };
+      if (receiveDetails) {
+        updates.receiverIdType = receiveDetails.receiverIdType;
+        updates.receiverIdNumber = receiveDetails.receiverIdNumber;
+        if (receiveDetails.notes) updates.notes = receiveDetails.notes;
+      }
+      batch.update(transferRef, updates);
       
       const auditRef = doc(collection(db, 'audit_logs'));
       batch.set(auditRef, {

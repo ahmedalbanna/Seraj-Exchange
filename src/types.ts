@@ -49,6 +49,8 @@ export interface Transfer {
   receivedAt?: Timestamp;
   receivedBy?: string;
   notes?: string;
+  receiverIdType?: string;
+  receiverIdNumber?: string;
 }
 
 export interface Settlement {

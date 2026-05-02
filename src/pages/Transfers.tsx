@@ -28,6 +28,14 @@ export default function Transfers() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  
+  const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
+  const [selectedTransferForReceive, setSelectedTransferForReceive] = useState<Transfer | null>(null);
+  const [receiveDetails, setReceiveDetails] = useState({
+    receiverIdType: 'nationalId',
+    receiverIdNumber: '',
+    notes: ''
+  });
   const [filters, setFilters] = useState({
     status: 'all',
     currency: 'all',
@@ -110,9 +118,22 @@ export default function Transfers() {
     setNewTransfer({ currency: 'USD', amount: 0, exchangeRate: 1 });
   };
 
-  const handleReceive = async (transfer: Transfer) => {
-    if (!profile) return;
-    await transferService.receive(transfer.id!, profile.uid, transfer);
+  const openReceiveModal = (transfer: Transfer) => {
+    setSelectedTransferForReceive(transfer);
+    setReceiveDetails({
+      receiverIdType: 'nationalId',
+      receiverIdNumber: '',
+      notes: ''
+    });
+    setIsReceiveModalOpen(true);
+  };
+
+  const handleReceive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile || !selectedTransferForReceive) return;
+    await transferService.receive(selectedTransferForReceive.id!, profile.uid, selectedTransferForReceive, receiveDetails);
+    setIsReceiveModalOpen(false);
+    setSelectedTransferForReceive(null);
   };
 
   const StatusBadge = ({ status }: { status: string }) => {
@@ -239,7 +260,7 @@ export default function Transfers() {
                   <td className="px-6 py-5">
                     {transfer.status === 'pending' && profile?.branchId === transfer.toBranchId && (
                       <button 
-                        onClick={() => handleReceive(transfer)}
+                        onClick={() => openReceiveModal(transfer)}
                         className="text-[10px] font-bold bg-emerald-600/90 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 active:scale-95"
                       >
                         تأكيد الاستلام
@@ -389,6 +410,63 @@ export default function Transfers() {
                 <button onClick={() => setIsConfirmOpen(false)} className="flex-1 py-4 rounded-2xl bg-white/5 text-slate-400 font-black hover:bg-white/10 transition-colors text-[10px] uppercase tracking-widest">إلغاء</button>
                 <button onClick={handleFinalCreate} className="flex-1 py-4 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-500 shadow-xl shadow-emerald-500/20 text-[10px] uppercase tracking-widest">تأكيد وإرسال</button>
               </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Receive Modal */}
+      <AnimatePresence>
+        {isReceiveModalOpen && selectedTransferForReceive && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[60]" onClick={() => setIsReceiveModalOpen(false)} />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="fixed inset-x-4 top-1/2 -translate-y-1/2 md:mx-auto max-w-md bg-slate-900 border border-white/10 rounded-3xl p-8 shadow-2xl z-[70]">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-white">تأكيد استلام الحوالة</h3>
+                <button onClick={() => setIsReceiveModalOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">
+                  <XCircle className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+              
+              <div className="bg-white/5 p-4 rounded-2xl mb-6 space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 font-bold uppercase tracking-widest">المستلم:</span>
+                  <span className="text-white font-black hover:text-emerald-400 transition-colors">{selectedTransferForReceive.receiverName}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 font-bold uppercase tracking-widest">المبلغ:</span>
+                  <span className="text-emerald-400 font-black">{selectedTransferForReceive.amount.toLocaleString()} {selectedTransferForReceive.currency}</span>
+                </div>
+              </div>
+
+              <form onSubmit={handleReceive} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">نوع إثبات الهوية</label>
+                  <select 
+                    required
+                    className="w-full bg-white/5 border border-white/10 rounded-xl text-sm py-2.5 px-4 outline-none"
+                    value={receiveDetails.receiverIdType}
+                    onChange={e => setReceiveDetails({...receiveDetails, receiverIdType: e.target.value})}
+                  >
+                    <option className="bg-slate-900" value="nationalId">بطاقة شخصية</option>
+                    <option className="bg-slate-900" value="passport">جواز سفر</option>
+                    <option className="bg-slate-900" value="familyCard">بطاقة عائلية</option>
+                    <option className="bg-slate-900" value="other">أخرى</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">ملاحظات / رقم الهوية</label>
+                  <input 
+                    required
+                    type="text" 
+                    className="w-full bg-white/5 border border-white/10 rounded-xl text-sm py-2.5 px-4 outline-none focus:border-emerald-500/50"
+                    placeholder="رقم الهوية أو أي ملاحظات إضافية"
+                    value={receiveDetails.receiverIdNumber}
+                    onChange={e => setReceiveDetails({...receiveDetails, receiverIdNumber: e.target.value})}
+                  />
+                </div>
+                <button type="submit" className="w-full mt-6 py-4 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-500 shadow-xl shadow-emerald-500/20 text-xs uppercase tracking-widest transition-all active:scale-95">تأكيد الاستلام وصرف المبلغ</button>
+              </form>
             </motion.div>
           </>
         )}
