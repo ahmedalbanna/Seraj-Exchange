@@ -65,7 +65,7 @@ service cloud.firestore {
         && incoming().email == request.auth.token.email;
       allow update: if isVerified() && (
         (isAdministrator() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'branchId'])) ||
-        (userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['displayName']))
+        (userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role']))
       );
     }
 

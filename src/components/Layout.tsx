@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useConfig } from './ConfigProvider';
 import { useAuth } from './AuthProvider';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { 
   LayoutDashboard, 
   ArrowLeftRight, 
@@ -99,13 +100,27 @@ export default function Layout() {
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
               {profile?.displayName?.[0] || profile?.email?.[0]?.toUpperCase()}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-white truncate">
                 {profile?.displayName || profile?.email}
               </p>
-              <p className="text-xs text-slate-400 capitalize">
-                {profile?.role}
-              </p>
+              <select 
+                className="bg-transparent text-xs text-blue-400 font-bold outline-none cursor-pointer mt-0.5"
+                value={profile?.role || ''}
+                onChange={async (e) => {
+                  if (profile) {
+                    try {
+                      await updateDoc(doc(db, 'users', profile.uid), { role: e.target.value });
+                    } catch (err) {
+                      console.error("Error updating role", err);
+                    }
+                  }
+                }}
+              >
+                <option className="bg-slate-900" value="Administrator">Administrator</option>
+                <option className="bg-slate-900" value="Supervisor">Supervisor</option>
+                <option className="bg-slate-900" value="Teller">Teller</option>
+              </select>
             </div>
           </div>
           <button 
