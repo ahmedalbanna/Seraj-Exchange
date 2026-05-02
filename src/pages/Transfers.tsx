@@ -18,12 +18,15 @@ import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { branchService } from '../services/branchService';
+import { currencyService } from '../services/currencyService';
+import { Currency } from '../types';
 
 export default function Transfers() {
   const { t } = useConfig();
   const { profile, isAdministrator, isSupervisor } = useAuth();
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -58,10 +61,12 @@ export default function Transfers() {
     );
 
     const branchesUnsub = branchService.subscribeToBranches(setBranches);
+    const currenciesUnsub = currencyService.subscribeToCurrencies(setCurrencies);
 
     return () => {
       unsubscribe();
       branchesUnsub();
+      currenciesUnsub();
     };
   }, [profile, isAdministrator, isSupervisor]);
 
@@ -174,9 +179,9 @@ export default function Transfers() {
               onChange={e => setFilters({...filters, currency: e.target.value})}
             >
               <option value="all" className="bg-slate-900">كل العملات</option>
-              <option value="USD" className="bg-slate-900">USD</option>
-              <option value="SAR" className="bg-slate-900">SAR</option>
-              <option value="YER" className="bg-slate-900">YER</option>
+              {currencies.filter(c => c.isActive).map(c => (
+                <option key={c.id} value={c.code} className="bg-slate-900">{c.code}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -324,9 +329,9 @@ export default function Transfers() {
                     <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">العملة</label>
                     <select required className="w-full bg-white/5 border border-white/10 rounded-xl text-sm py-2.5 px-3 outline-none" value={newTransfer.currency} 
                       onChange={e => setNewTransfer({...newTransfer, currency: e.target.value})}>
-                      <option className="bg-slate-900" value="USD">USD - دولار أمريكي</option>
-                      <option className="bg-slate-900" value="SAR">SAR - ريال سعودي</option>
-                      <option className="bg-slate-900" value="YER">YER - ريال يمني</option>
+                      {currencies.filter(c => c.isActive).map(c => (
+                        <option key={c.id} className="bg-slate-900" value={c.code}>{c.code} - {c.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div>

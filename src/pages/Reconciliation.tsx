@@ -310,7 +310,7 @@ export default function Reconciliation() {
                   
                   <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 text-center">
                     <div className="text-[10px] font-black text-slate-500 uppercase mb-1">المبلغ الصافي بالتسوية</div>
-                    <div className="text-xl font-black text-blue-400">{(settlementForm.amount * settlementForm.rate).toLocaleString()} YER</div>
+                    <div className="text-xl font-black text-blue-400">{(settlementForm.amount * settlementForm.rate).toLocaleString()}</div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 pt-4">

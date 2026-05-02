@@ -8,11 +8,18 @@ import { TrendingUp, Plus, Clock, ArrowUpRight, ArrowDownRight } from 'lucide-re
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
+import { currencyService } from '../services/currencyService';
+import { Currency } from '../types';
+
 export default function ExchangeRates() {
   const { t } = useConfig();
-  const { profile, isManager } = useAuth();
+  const { profile, isAdministrator, isSupervisor } = useAuth();
+  const canManage = isAdministrator || isSupervisor;
+  const [activeTab, setActiveTab] = useState<'rates' | 'currencies'>('rates');
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [newCurrency, setNewCurrency] = useState<Omit<Currency, 'id'>>({ code: '', name: '', symbol: '', isActive: true });
   const [newRate, setNewRate] = useState({
     baseCurrency: 'USD',
     targetCurrency: 'YER',
@@ -22,11 +29,17 @@ export default function ExchangeRates() {
 
   useEffect(() => {
     const q = query(collection(db, 'exchange_rates'), orderBy('date', 'desc'), limit(20));
-    const unsubscribe = onSnapshot(q, (snap) => {
+    const unsubscribeRates = onSnapshot(q, (snap) => {
       setRates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ExchangeRate)));
       setLoading(false);
     });
-    return () => unsubscribe();
+    
+    const unsubscribeCurrencies = currencyService.subscribeToCurrencies(setCurrencies);
+    
+    return () => {
+      unsubscribeRates();
+      unsubscribeCurrencies();
+    };
   }, []);
 
   const handleAddRate = async (e: React.FormEvent) => {
@@ -39,22 +52,58 @@ export default function ExchangeRates() {
         updatedBy: profile.uid,
         date: serverTimestamp(),
       });
-      setNewRate({ baseCurrency: 'USD', targetCurrency: 'YER', officialRate: 0, marketRate: 0 });
+      setNewRate({ baseCurrency: currencies[0]?.code || 'USD', targetCurrency: currencies[1]?.code || 'YER', officialRate: 0, marketRate: 0 });
     } catch (err) {
       console.error("Error adding rate", err);
     }
   };
 
+  const handleAddCurrency = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile) return;
+    try {
+      await currencyService.addCurrency(newCurrency);
+      setNewCurrency({ code: '', name: '', symbol: '', isActive: true });
+    } catch (err) {
+      console.error("Error adding currency", err);
+    }
+  };
+
+  const toggleCurrencyActive = async (id: string, isActive: boolean) => {
+    try {
+      await currencyService.updateCurrency(id, { isActive: !isActive });
+    } catch (err) {
+      console.error("Error updating currency", err);
+    }
+  };
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">إدارة أسعار الصرف</h1>
-        <p className="text-slate-400 text-sm font-medium">تسجيل الأسعار الرسمية والموازية المعتمدة للمحاسبة الداخلية</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">إدارة أسعار الصرف والعملات</h1>
+          <p className="text-slate-400 text-sm font-medium">إعدادات العملات وتحديث أسعار الصرف</p>
+        </div>
+        <div className="flex gap-2 bg-white/5 p-1 rounded-xl">
+          <button 
+            onClick={() => setActiveTab('rates')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'rates' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            أسعار الصرف
+          </button>
+          <button 
+            onClick={() => setActiveTab('currencies')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'currencies' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            العملات المدعومة
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {activeTab === 'rates' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Rate Entry Form (Managers only) */}
-        {isManager && (
+        {canManage && (
           <div className="lg:col-span-1">
             <div className="bg-white/5 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl sticky top-24">
               <h3 className="font-bold text-white mb-6 flex items-center gap-2 text-sm">
@@ -66,14 +115,17 @@ export default function ExchangeRates() {
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">من عملة</label>
                     <select className="w-full bg-white/5 border border-white/10 rounded-xl text-xs py-2.5 px-3 outline-none focus:ring-1 focus:ring-blue-500" value={newRate.baseCurrency} onChange={e => setNewRate({...newRate, baseCurrency: e.target.value})}>
-                      <option className="bg-slate-900" value="USD">USD - دولار</option>
-                      <option className="bg-slate-900" value="SAR">SAR - سعودي</option>
+                      {currencies.filter(c => c.isActive).map(c => (
+                        <option key={c.id} className="bg-slate-900" value={c.code}>{c.code} - {c.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">إلى عملة</label>
                     <select className="w-full bg-white/5 border border-white/10 rounded-xl text-xs py-2.5 px-3 outline-none focus:ring-1 focus:ring-blue-500" value={newRate.targetCurrency} onChange={e => setNewRate({...newRate, targetCurrency: e.target.value})}>
-                      <option className="bg-slate-900" value="YER">YER - ريال يمني</option>
+                      {currencies.filter(c => c.isActive).map(c => (
+                        <option key={c.id} className="bg-slate-900" value={c.code}>{c.code} - {c.name}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -94,7 +146,7 @@ export default function ExchangeRates() {
         )}
 
         {/* Rates History List */}
-        <div className={isManager ? "lg:col-span-2" : "lg:col-span-3"}>
+        <div className={canManage ? "lg:col-span-2" : "lg:col-span-3"}>
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-xl overflow-hidden">
             <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
               <h3 className="font-bold text-white text-sm">السجل التاريخي</h3>
@@ -149,7 +201,71 @@ export default function ExchangeRates() {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {canManage && (
+            <div className="lg:col-span-1">
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl sticky top-24">
+                <h3 className="font-bold text-white mb-6 flex items-center gap-2 text-sm">
+                  <Plus className="w-5 h-5 text-blue-400" />
+                  إضافة عملة جديدة
+                </h3>
+                <form onSubmit={handleAddCurrency} className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">رمز العملة (مثال: USD)</label>
+                    <input required type="text" className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-4 outline-none focus:ring-1 focus:ring-blue-500 text-sm uppercase" value={newCurrency.code} onChange={e => setNewCurrency({...newCurrency, code: e.target.value.toUpperCase()})} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">الاسم (مثال: دولار أمريكي)</label>
+                    <input required type="text" className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-4 outline-none focus:ring-1 focus:ring-blue-500 text-sm" value={newCurrency.name} onChange={e => setNewCurrency({...newCurrency, name: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">الرمز (مثال: $)</label>
+                    <input required type="text" className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-4 outline-none focus:ring-1 focus:ring-blue-500 text-sm" value={newCurrency.symbol} onChange={e => setNewCurrency({...newCurrency, symbol: e.target.value})} />
+                  </div>
+                  <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-all shadow-xl shadow-blue-500/20 active:scale-95 text-[10px] uppercase tracking-widest mt-4">
+                    إضافة عملة
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          <div className={canManage ? "lg:col-span-2" : "lg:col-span-3"}>
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-xl overflow-hidden">
+              <div className="p-6 border-b border-white/5 bg-white/[0.02]">
+                <h3 className="font-bold text-white text-sm">العملات المدعومة</h3>
+              </div>
+              <div className="divide-y divide-white/5">
+                {currencies.length === 0 ? (
+                  <div className="p-12 text-center text-slate-500 italic text-sm font-medium">لا توجد عملات مدعومة</div>
+                ) : currencies.map((currency) => (
+                  <div key={currency.id} className={`p-6 hover:bg-white/[0.02] transition-colors flex items-center justify-between gap-4 ${!currency.isActive ? 'opacity-50' : ''}`}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-black text-xl">
+                        {currency.symbol}
+                      </div>
+                      <div>
+                        <div className="font-black text-white text-lg">{currency.code}</div>
+                        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{currency.name}</p>
+                      </div>
+                    </div>
+                    {canManage && (
+                      <button 
+                        onClick={() => toggleCurrencyActive(currency.id!, currency.isActive)}
+                        className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors ${currency.isActive ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-slate-500/10 text-slate-400 hover:bg-slate-500/20'}`}
+                      >
+                        {currency.isActive ? 'مفعل' : 'معطل'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

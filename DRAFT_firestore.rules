@@ -49,6 +49,11 @@ service cloud.firestore {
       allow update: if isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'branchId']);
     }
 
+    match /currencies/{currencyId} {
+      allow read: if isVerified();
+      allow write: if isAdministrator() || isSupervisor();
+    }
+
     match /exchange_rates/{rateId} {
       allow read: if isVerified();
       allow create: if isManager() && isValidExchangeRate(incoming());

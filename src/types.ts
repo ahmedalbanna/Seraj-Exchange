@@ -8,6 +8,14 @@ export interface UserProfile {
   branchId?: string;
 }
 
+export interface Currency {
+  id?: string;
+  code: string;
+  name: string;
+  symbol: string;
+  isActive: boolean;
+}
+
 export interface ExchangeRate {
   id?: string;
   baseCurrency: string;
