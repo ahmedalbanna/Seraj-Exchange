@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider';
 import { notificationService } from '../services/notificationService';
 import { Notification } from '../types';
-import { Bell, Check, Trash2, ExternalLink, Circle } from 'lucide-react';
+import { Bell, Check, ExternalLink, Circle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';

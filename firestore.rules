@@ -10,7 +10,9 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isVerified() { return isSignedIn(); } // Relaxed for development stability
     function getUserData() { 
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; 
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ?
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data :
+        {'role': 'none', 'branchId': 'none'};
     }
     function isAdministrator() { return isVerified() && getUserData().role == 'Administrator'; }
     function isSupervisor() { 

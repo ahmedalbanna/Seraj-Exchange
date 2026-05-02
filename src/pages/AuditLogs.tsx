@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useConfig } from '../components/ConfigProvider';
 import { useAuth } from '../components/AuthProvider';
 import { auditService } from '../services/auditService';
 import { AuditLog } from '../types';

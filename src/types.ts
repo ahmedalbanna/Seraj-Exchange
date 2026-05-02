@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export type UserRole = 'Administrator' | 'Supervisor' | 'Teller';
 
 export interface UserProfile {
@@ -22,7 +24,7 @@ export interface ExchangeRate {
   targetCurrency: string;
   officialRate: number;
   marketRate: number;
-  date: any; // Firestore Timestamp
+  date: Timestamp; // Firestore Timestamp
   updatedBy: string;
 }
 
@@ -41,10 +43,10 @@ export interface Transfer {
   fromBranchId: string;
   toBranchId: string;
   status: TransferStatus;
-  issuedAt: any; // Firestore Timestamp
+  issuedAt: Timestamp; // Firestore Timestamp
   issuedBy: string;
-  expectedReceiptDate?: any;
-  receivedAt?: any;
+  expectedReceiptDate?: Timestamp;
+  receivedAt?: Timestamp;
   receivedBy?: string;
   notes?: string;
 }
@@ -57,7 +59,7 @@ export interface Settlement {
   amount: number;
   appliedRate: number;
   settledAmount: number;
-  settledAt: any;
+  settledAt: Timestamp;
   settledBy: string;
   transferIds: string[]; // List of transfers covered by this settlement
   status: 'pending' | 'completed';
@@ -78,7 +80,7 @@ export interface Notification {
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
   read: boolean;
-  createdAt: any;
+  createdAt: Timestamp;
   link?: string;
 }
 
@@ -90,9 +92,9 @@ export interface AuditLog {
   amount: number;
   currency: string;
   exchangeRate?: number;
-  senderDetails?: any;
-  receiverDetails?: any;
+  senderDetails?: Record<string, string>;
+  receiverDetails?: Record<string, string>;
   userId: string;
-  timestamp: any;
-  details?: any;
+  timestamp: Timestamp;
+  details?: Record<string, unknown>;
 }

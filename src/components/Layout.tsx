@@ -17,7 +17,8 @@ import {
   Building2,
   Users as UsersIcon,
   Scale,
-  ShieldAlert
+  ShieldAlert,
+  LucideIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -50,8 +51,7 @@ export default function Layout() {
     navigate('/login');
   };
 
-  const NavItem = ({ item }: { item: any }) => {
-    const isActive = location.pathname === item.path;
+  const NavItem = ({ item, isActive }: { item: { id: string, path: string, label: string, icon: LucideIcon }, isActive: boolean }) => {
     const Icon = item.icon;
     
     return (
@@ -92,7 +92,14 @@ export default function Layout() {
         </div>
         
         <nav className="flex-1 px-4 space-y-2 mt-4">
-          {menuItems.map(item => <NavItem key={item.id} item={item} />)}
+          {menuItems.map(item => (
+            <React.Fragment key={item.id}>
+              <NavItem 
+                item={item} 
+                isActive={location.pathname === item.path} 
+              />
+            </React.Fragment>
+          ))}
         </nav>
 
         <div className="p-4 border-t border-white/10">
@@ -204,7 +211,14 @@ export default function Layout() {
                 </button>
               </div>
               <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                {menuItems.map(item => <NavItem key={item.id} item={item} />)}
+                {menuItems.map(item => (
+                  <React.Fragment key={item.id}>
+                    <NavItem 
+                      item={item} 
+                      isActive={location.pathname === item.path} 
+                    />
+                  </React.Fragment>
+                ))}
               </nav>
               <div className="p-4 border-t border-white/10">
                 <button 

@@ -8,9 +8,7 @@ import {
   Plus, 
   Search, 
   XCircle, 
-  Clock,
   ArrowRightLeft,
-  CheckCircle2,
   Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -92,7 +90,7 @@ export default function Transfers() {
     if (!profile) return;
     
     await transferService.create({
-      ...newTransfer as any,
+      ...newTransfer as Omit<Transfer, 'issuedAt' | 'issuedBy' | 'status' | 'id'>,
       fromBranchId: profile.branchId || 'main',
       totalAmount: (newTransfer.amount || 0) * (newTransfer.exchangeRate || 1),
     }, profile.uid);

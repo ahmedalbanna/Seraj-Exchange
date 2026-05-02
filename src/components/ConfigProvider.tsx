@@ -85,7 +85,8 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [theme]);
 
   const t = (key: string) => {
-    return (translations[lang] as any)[key] || key;
+    const dict = translations[lang] as Record<string, string>;
+    return dict[key] || key;
   };
 
   return (

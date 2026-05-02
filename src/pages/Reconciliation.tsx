@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useConfig } from '../components/ConfigProvider';
 import { useAuth } from '../components/AuthProvider';
 import { branchService } from '../services/branchService';
 import { settlementService } from '../services/settlementService';
@@ -8,7 +7,6 @@ import { Branch, Settlement } from '../types';
 import { 
   Scale, 
   ArrowRightLeft, 
-  Building2, 
   ChevronRight, 
   FileText,
   Calculator,
@@ -20,11 +18,9 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
 export default function Reconciliation() {
-  const { t } = useConfig();
   const { isAdministrator, isSupervisor, profile } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
-  const [loading, setLoading] = useState(true);
   
   const [sourceBranch, setSourceBranch] = useState('');
   const [targetBranch, setTargetBranch] = useState('');
@@ -41,7 +37,6 @@ export default function Reconciliation() {
     if (!isAdministrator && !isSupervisor) return;
     const unsubBranches = branchService.subscribeToBranches(setBranches);
     const unsubSettlements = settlementService.subscribeToSettlements(setSettlements);
-    setLoading(false);
     return () => {
       unsubBranches();
       unsubSettlements();

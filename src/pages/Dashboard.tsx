@@ -4,18 +4,16 @@ import { useAuth } from '../components/AuthProvider';
 import { 
   ArrowUpRight, 
   ArrowDownRight, 
-  Wallet, 
   ArrowLeftRight, 
   TrendingUp,
-  Clock
+  Clock,
+  LucideIcon
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Transfer } from '../types';
 import { 
-  LineChart, 
-  Line, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -26,7 +24,7 @@ import {
 } from 'recharts';
 
 export default function Dashboard() {
-  const { t, lang } = useConfig();
+  const { t } = useConfig();
   const { profile, isAdministrator, isSupervisor } = useAuth();
   const [stats, setStats] = useState({ total_sent: 0, total_received: 0, pending: 0, daily_avg: 0 });
   const [recentTransfers, setRecentTransfers] = useState<Transfer[]>([]);
@@ -57,7 +55,7 @@ export default function Dashboard() {
         }
 
         const querySnapshot = await getDocs(q);
-        const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transfer));
+        const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Transfer));
         setRecentTransfers(fetched);
 
         // In a real app, these would be aggregations or from a summary doc
@@ -87,7 +85,7 @@ export default function Dashboard() {
     { name: '30/04', value: 3490 },
   ];
 
-  const StatCard = ({ title, value, icon: Icon, color, trend }: any) => (
+  const StatCard = ({ title, value, icon: Icon, color, trend }: { title: string, value: number, icon: LucideIcon, color: string, trend?: number }) => (
     <motion.div 
       whileHover={{ y: -5 }}
       className="bg-white/5 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl"
@@ -210,6 +208,6 @@ export default function Dashboard() {
   );
 }
 
-function cn(...inputs: any[]) {
+const cn = (...inputs: (string | boolean | undefined)[]) => {
   return inputs.filter(Boolean).join(' ');
 }

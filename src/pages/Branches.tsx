@@ -124,7 +124,7 @@ export default function Branches() {
                   <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">الأرصدة الحالية</div>
                   <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 px-2 py-1 rounded">
                     إجمالي تقديري: {
-                      Object.entries(branch.balances || {}).reduce((acc, [curr, amt]) => acc + convertToBase(amt, curr), 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                      Object.entries(branch.balances || {}).reduce((acc: number, [curr, amt]) => acc + convertToBase(amt as number, curr), 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
                     } {baseCurrency}
                   </div>
                 </div>

@@ -6,11 +6,10 @@ import {
   orderBy, 
   onSnapshot,
   serverTimestamp,
-  writeBatch,
-  updateDoc
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Transfer } from '../types';
+import { Transfer, TransferStatus } from '../types';
 import { handleFirestoreError } from './errorService';
 
 export const transferService = {
@@ -49,7 +48,8 @@ export const transferService = {
       await batch.commit();
       return transferRef.id;
     } catch (error) {
-      handleFirestoreError(error, 'create', 'transfers');
+      handleFirestoreError(error, 'write', 'transfers');
+      return null;
     }
   },
 
@@ -95,7 +95,7 @@ export const transferService = {
       const batch = writeBatch(db);
       
       const docRef = doc(db, 'transfers', transferId);
-      const updates: any = { status };
+      const updates: Record<string, unknown> = { status };
       if (notes !== undefined) updates.notes = notes;
       batch.update(docRef, updates);
       

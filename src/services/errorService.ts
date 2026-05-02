@@ -13,11 +13,12 @@ export interface FirestoreErrorInfo {
   }
 }
 
-export function handleFirestoreError(error: any, operationType: FirestoreErrorInfo['operationType'], path: string | null = null): never {
-  if (error.code === 'permission-denied') {
+export function handleFirestoreError(error: unknown, operationType: FirestoreErrorInfo['operationType'], path: string | null = null): never {
+  const firebaseError = error as { code: string; message: string };
+  if (firebaseError?.code === 'permission-denied') {
     const user = auth.currentUser;
     const errorInfo: FirestoreErrorInfo = {
-      error: error.message,
+      error: firebaseError.message,
       operationType,
       path,
       authInfo: {
