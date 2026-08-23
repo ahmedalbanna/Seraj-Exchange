@@ -18,6 +18,7 @@ export default function ExchangeRates() {
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [rateLimit, setRateLimit] = useState(20);
   const [newCurrency, setNewCurrency] = useState<Omit<Currency, 'id'>>({ code: '', name: '', symbol: '', isActive: true });
   const [newRate, setNewRate] = useState({
     baseCurrency: 'USD',
@@ -27,10 +28,11 @@ export default function ExchangeRates() {
   });
 
   useEffect(() => {
+    setLoading(true);
     const unsubscribeRates = exchangeRateService.subscribeToRates((data) => {
       setRates(data);
       setLoading(false);
-    }, 20);
+    }, rateLimit);
     
     const unsubscribeCurrencies = currencyService.subscribeToCurrencies(setCurrencies);
     
@@ -38,7 +40,7 @@ export default function ExchangeRates() {
       unsubscribeRates();
       unsubscribeCurrencies();
     };
-  }, []);
+  }, [rateLimit]);
 
   const handleAddRate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,6 +197,17 @@ export default function ExchangeRates() {
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="p-4 border-t border-white/5 bg-white/[0.02] flex justify-between items-center">
+              <span className="text-[10px] text-slate-500 font-medium">عرض {rates.length} (الحد {rateLimit})</span>
+              <div className="flex gap-2">
+                {rates.length >= rateLimit ? (
+                  <button onClick={() => setRateLimit(v => v + 20)} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-white hover:bg-white/10">تحميل المزيد</button>
+                ) : rates.length > 0 ? (
+                  <span className="text-[10px] text-slate-500 font-bold">تم تحميل الكل</span>
+                ) : null}
+                {rateLimit > 20 && <button onClick={() => setRateLimit(20)} className="px-3 py-2 text-[10px] font-bold text-slate-400 hover:text-white">إعادة تعيين</button>}
+              </div>
             </div>
           </div>
         </div>

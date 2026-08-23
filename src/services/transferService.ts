@@ -4,6 +4,7 @@ import {
   query, 
   where, 
   orderBy, 
+  limit,
   onSnapshot,
   serverTimestamp,
   writeBatch
@@ -149,11 +150,11 @@ export const transferService = {
     }
   },
 
-  subscribeToBranchTransfers: (branchId: string, isAdministrator: boolean, isSupervisor: boolean, callback: (transfers: Transfer[]) => void) => {
+  subscribeToBranchTransfers: (branchId: string, isAdministrator: boolean, isSupervisor: boolean, callback: (transfers: Transfer[]) => void, limitCount: number = 50) => {
     const transfersRef = collection(db, 'transfers');
     
     if (isAdministrator || isSupervisor) {
-      const q = query(transfersRef, orderBy('issuedAt', 'desc'));
+      const q = query(transfersRef, orderBy('issuedAt', 'desc'), limit(limitCount));
       return onSnapshot(q, (snapshot) => {
         const transfers = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -165,14 +166,14 @@ export const transferService = {
       });
     }
 
-    // Teller: merge inbound + outbound (Firestore has no OR across fields)
+    // Teller: merge inbound + outbound (Firestore has no OR across fields) — paginated via limit
     if (!branchId) {
       callback([]);
       return () => {};
     }
 
-    const qFrom = query(transfersRef, where('fromBranchId', '==', branchId), orderBy('issuedAt', 'desc'));
-    const qTo = query(transfersRef, where('toBranchId', '==', branchId), orderBy('issuedAt', 'desc'));
+    const qFrom = query(transfersRef, where('fromBranchId', '==', branchId), orderBy('issuedAt', 'desc'), limit(limitCount));
+    const qTo = query(transfersRef, where('toBranchId', '==', branchId), orderBy('issuedAt', 'desc'), limit(limitCount));
 
     let fromTransfers: Transfer[] = [];
     let toTransfers: Transfer[] = [];

@@ -4,6 +4,7 @@ import {
   query, 
   where, 
   orderBy, 
+  limit,
   onSnapshot, 
   serverTimestamp,
   updateDoc,
@@ -16,15 +17,18 @@ import { Notification } from '../types';
 import { handleFirestoreError } from './errorService';
 
 export const notificationService = {
-  subscribeToNotifications: (userId: string, callback: (notifications: Notification[]) => void) => {
+  subscribeToNotifications: (userId: string, callback: (notifications: Notification[]) => void, limitCount: number = 50) => {
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(limitCount)
     );
 
     return onSnapshot(q, (snap) => {
       callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification)));
+    }, (error) => {
+      console.error("Error subscribing to notifications", error);
     });
   },
 
@@ -108,6 +112,26 @@ export const notificationService = {
       await batch.commit();
     } catch (error) {
       handleFirestoreError(error, 'create', 'notifications');
+    }
+  },
+
+  clearAll: async (userId: string) => {
+    try {
+      const q = query(collection(db, 'notifications'), where('userId', '==', userId));
+      const snap = await getDocs(q);
+      if (snap.empty) return;
+      // Firestore batch limit 500 — chunk if needed
+      const chunks: typeof snap.docs[] = [];
+      for (let i = 0; i < snap.docs.length; i += 500) {
+        chunks.push(snap.docs.slice(i, i + 500));
+      }
+      for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } catch (error) {
+      handleFirestoreError(error, 'delete', 'notifications');
     }
   }
 };

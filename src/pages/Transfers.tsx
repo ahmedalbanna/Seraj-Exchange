@@ -51,6 +51,7 @@ export default function Transfers() {
     receiverPhone: '',
     toBranchId: '',
   });
+  const [transferLimit, setTransferLimit] = useState(25);
 
   useEffect(() => {
     if (!profile) return;
@@ -63,7 +64,8 @@ export default function Transfers() {
       (data) => {
         setTransfers(data);
         setLoading(false);
-      }
+      },
+      transferLimit
     );
 
     const branchesUnsub = branchService.subscribeToBranches(setBranches);
@@ -74,7 +76,7 @@ export default function Transfers() {
       branchesUnsub();
       currenciesUnsub();
     };
-  }, [profile, isAdministrator, isSupervisor]);
+  }, [profile, isAdministrator, isSupervisor, transferLimit]);
 
   const filteredTransfers = transfers.filter(t => {
     const matchesStatus = filters.status === 'all' || t.status === filters.status;
@@ -300,6 +302,19 @@ export default function Transfers() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="p-4 border-t border-white/5 bg-white/[0.02] flex flex-col sm:flex-row justify-between items-center gap-3">
+          <span className="text-[10px] text-slate-500 font-medium">عرض {filteredTransfers.length} من {transfers.length} (الحد {transferLimit}) • يتم إلغاء الاشتراك تلقائياً عند مغادرة الصفحة</span>
+          <div className="flex gap-2">
+            {filteredTransfers.length >= transferLimit ? (
+              <button onClick={() => setTransferLimit(v => v + 25)} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-white hover:bg-white/10">تحميل المزيد</button>
+            ) : filteredTransfers.length > 0 ? (
+              <span className="px-4 py-2 text-[10px] text-slate-500 font-bold">تم تحميل الكل</span>
+            ) : null}
+            {transferLimit > 25 && (
+              <button onClick={() => setTransferLimit(25)} className="px-3 py-2 rounded-xl bg-transparent text-[10px] font-bold text-slate-400 hover:text-white">إعادة تعيين</button>
+            )}
+          </div>
         </div>
       </div>
 

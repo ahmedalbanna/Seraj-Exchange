@@ -12,16 +12,18 @@ export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [limitCount, setLimitCount] = useState(50);
 
   useEffect(() => {
     if (!isAdministrator && !isSupervisor) return;
+    setLoading(true);
     const unsubscribe = auditService.subscribeToAuditLogs((data) => {
       setLogs(data);
       setLoading(false);
-    }, 200);
+    }, limitCount);
 
     return () => unsubscribe();
-  }, [isAdministrator, isSupervisor]);
+  }, [isAdministrator, isSupervisor, limitCount]);
 
   if (!isAdministrator && !isSupervisor) return <Navigate to="/" />;
 
@@ -105,6 +107,19 @@ export default function AuditLogs() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="p-4 border-t border-white/5 bg-white/[0.02] flex flex-col sm:flex-row justify-between items-center gap-3">
+          <span className="text-[10px] text-slate-500 font-medium">عرض {filteredLogs.length} من {logs.length} (الحد {limitCount}) • قراءة فقط، لا يمكن التعديل</span>
+          <div className="flex gap-2">
+            {logs.length >= limitCount ? (
+              <button onClick={() => setLimitCount(v => v + 50)} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-white hover:bg-white/10">تحميل المزيد</button>
+            ) : logs.length > 0 ? (
+              <span className="px-4 py-2 text-[10px] text-slate-500 font-bold">تم تحميل الكل</span>
+            ) : null}
+            {limitCount > 50 && (
+              <button onClick={() => setLimitCount(50)} className="px-3 py-2 rounded-xl bg-transparent text-[10px] font-bold text-slate-400 hover:text-white">إعادة تعيين</button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { auth } from '../lib/firebase';
+import { logger } from '../lib/logger';
 
 export interface FirestoreErrorInfo {
   error: string;
@@ -15,8 +16,15 @@ export interface FirestoreErrorInfo {
 
 export function handleFirestoreError(error: unknown, operationType: FirestoreErrorInfo['operationType'], path: string | null = null): never {
   const firebaseError = error as { code: string; message: string };
+  const user = auth.currentUser;
+  const baseCtx = {
+    path,
+    operationType,
+    userId: user?.uid || 'anonymous',
+    extra: { code: firebaseError?.code, message: firebaseError?.message } as Record<string, unknown>,
+  };
+
   if (firebaseError?.code === 'permission-denied') {
-    const user = auth.currentUser;
     const errorInfo: FirestoreErrorInfo = {
       error: firebaseError.message,
       operationType,
@@ -33,7 +41,16 @@ export function handleFirestoreError(error: unknown, operationType: FirestoreErr
         })) || [],
       }
     };
+    logger.error(`Firestore permission-denied at ${path || 'unknown'}`, baseCtx);
     throw new Error(JSON.stringify(errorInfo));
   }
+
+  // Non-permission errors also structured
+  if (firebaseError?.code) {
+    logger.error(`Firestore error ${firebaseError.code} at ${path || 'unknown'}`, baseCtx);
+  } else {
+    logger.error(`Unknown Firestore error at ${path || 'unknown'}`, { ...baseCtx, extra: { error: String(error) } });
+  }
+
   throw error;
 }

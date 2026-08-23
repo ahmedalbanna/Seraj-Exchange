@@ -28,6 +28,10 @@ export default function NotificationCenter() {
     if (user) notificationService.markAllAsRead(user.uid);
   };
 
+  const handleClearAll = () => {
+    if (user) notificationService.clearAll(user.uid);
+  };
+
   return (
     <div className="relative">
       <button 
@@ -118,10 +122,11 @@ export default function NotificationCenter() {
                 )}
               </div>
 
-              <div className="p-3 border-t border-white/5 bg-white/[0.02]">
-                <button className="w-full py-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 text-[10px] uppercase font-black tracking-widest hover:bg-white/10 transition-colors">
+              <div className="p-3 border-t border-white/5 bg-white/[0.02] flex gap-2">
+                <button onClick={handleClearAll} className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 text-[10px] uppercase font-black tracking-widest hover:bg-white/10 transition-colors">
                   مسح جميع التنبيهات
                 </button>
+                <button onClick={() => setIsOpen(false)} className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-500">إغلاق</button>
               </div>
             </motion.div>
           </>
