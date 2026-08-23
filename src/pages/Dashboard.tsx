@@ -13,6 +13,7 @@ import { motion } from 'framer-motion';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Transfer } from '../types';
+import { cn } from '../lib/utils';
 import { 
   XAxis, 
   YAxis, 
@@ -99,13 +100,19 @@ export default function Dashboard() {
     { name: '30/04', value: 3490 },
   ];
 
+  const colorMap: Record<string, string> = {
+    blue: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    emerald: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    amber: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    violet: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  };
   const StatCard = ({ title, value, icon: Icon, color, trend }: { title: string, value: number, icon: LucideIcon, color: string, trend?: number }) => (
     <motion.div 
       whileHover={{ y: -5 }}
       className="bg-white/5 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl"
     >
       <div className="flex justify-between items-start mb-4">
-        <div className={`p-3 rounded-xl bg-${color}-500/10 text-${color}-400 border border-${color}-500/20`}>
+        <div className={cn("p-3 rounded-xl border", colorMap[color] || colorMap.blue)}>
           <Icon className="w-6 h-6" />
         </div>
         {trend && (
@@ -220,8 +227,4 @@ export default function Dashboard() {
       </div>
     </div>
   );
-}
-
-const cn = (...inputs: (string | boolean | undefined)[]) => {
-  return inputs.filter(Boolean).join(' ');
 }

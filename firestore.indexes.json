@@ -1,0 +1,67 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "transfers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fromBranchId", "order": "ASCENDING" },
+        { "fieldPath": "issuedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transfers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "toBranchId", "order": "ASCENDING" },
+        { "fieldPath": "issuedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transfers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fromBranchId", "order": "ASCENDING" },
+        { "fieldPath": "toBranchId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "exchange_rates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "read", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "settlements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "settledAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

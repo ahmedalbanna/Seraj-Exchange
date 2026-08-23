@@ -11,17 +11,22 @@ import {
   MapPin,
   Wallet
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Navigate } from 'react-router-dom';
 
 export default function Branches() {
   const { t } = useConfig();
-  const { isAdministrator } = useAuth();
+  const { profile, isAdministrator } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [baseCurrency, setBaseCurrency] = useState('USD');
+  const [isAdjustOpen, setIsAdjustOpen] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const [adjustType, setAdjustType] = useState<'deposit' | 'withdraw'>('deposit');
+  const [adjustCurrency, setAdjustCurrency] = useState('USD');
+  const [adjustAmount, setAdjustAmount] = useState<number>(0);
 
   useEffect(() => {
     if (!isAdministrator) return;
@@ -47,19 +52,43 @@ export default function Branches() {
 
   if (!isAdministrator) return <Navigate to="/" />;
 
-  // Utility to convert amount from any currency to baseCurrency
-  const convertToBase = (amount: number, fromCurrency: string) => {
+  // Convert any currency amount to baseCurrency using latest officialRate
+  // Returns null if no rate path exists (caller should skip in totals)
+  const convertToBase = (amount: number, fromCurrency: string): number | null => {
     if (fromCurrency === baseCurrency) return amount;
     
-    // Look for a direct rate where we are converting TO base (e.g. YER to USD -> we need base YER, target USD)
+    // Direct: from -> base (e.g. YER -> USD if rate YER/USD exists)
     const directRate = rates.find(r => r.baseCurrency === fromCurrency && r.targetCurrency === baseCurrency);
-    if (directRate) return amount * directRate.officialRate; // or marketRate depending on business logic
+    if (directRate && directRate.officialRate > 0) return amount * directRate.officialRate;
 
-    // Look for reverse rate (e.g. base USD, target YER -> dividing YER by rate gives USD)
+    // Reverse: base -> from (e.g. USD -> YER 530, so YER / 530 = USD)
     const reverseRate = rates.find(r => r.baseCurrency === baseCurrency && r.targetCurrency === fromCurrency);
     if (reverseRate && reverseRate.officialRate > 0) return amount / reverseRate.officialRate;
 
-    return 0; // cannot convert
+    return null; // no conversion path
+  };
+
+  const openAdjust = (branch: Branch, type: 'deposit' | 'withdraw') => {
+    setSelectedBranch(branch);
+    setAdjustType(type);
+    setAdjustCurrency(currencies.find(c => c.isActive)?.code || 'USD');
+    setAdjustAmount(0);
+    setIsAdjustOpen(true);
+  };
+
+  const handleAdjust = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBranch?.id || !profile) return;
+    try {
+      if (adjustType === 'deposit') {
+        await branchService.deposit(selectedBranch.id, adjustCurrency, adjustAmount, profile.uid);
+      } else {
+        await branchService.withdraw(selectedBranch.id, adjustCurrency, adjustAmount, profile.uid);
+      }
+      setIsAdjustOpen(false);
+    } catch (err) {
+      console.error("Balance adjust failed", err);
+    }
   };
 
   return (
@@ -122,11 +151,18 @@ export default function Branches() {
               <div className="space-y-3 pt-6 border-t border-white/5">
                 <div className="flex justify-between items-center mb-2">
                   <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">الأرصدة الحالية</div>
-                  <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 px-2 py-1 rounded">
-                    إجمالي تقديري: {
-                      Object.entries(branch.balances || {}).reduce((acc: number, [curr, amt]) => acc + convertToBase(amt as number, curr), 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
-                    } {baseCurrency}
-                  </div>
+                  {(() => {
+                    const entries = Object.entries(branch.balances || {}) as [string, number][];
+                    const converted = entries.map(([c,a]) => convertToBase(a, c));
+                    const total = converted.reduce((acc: number, v) => v !== null ? acc + v : acc, 0);
+                    const hasUnconvertible = converted.some(v => v === null);
+                    return (
+                      <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 px-2 py-1 rounded">
+                        إجمالي تقديري: {total.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrency}
+                        {hasUnconvertible && <span className="text-amber-400 ms-1">• غير مكتمل</span>}
+                      </div>
+                    );
+                  })()}
                 </div>
                 
                 <div className="grid grid-cols-3 gap-2">
@@ -145,13 +181,48 @@ export default function Branches() {
               </div>
 
               <div className="mt-8 flex gap-3">
-                <button className="flex-1 bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-xl border border-white/5 transition-all text-xs tracking-tight">التفاصيل</button>
-                <button className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-xs tracking-tight">إيداع / سحب</button>
+                <button onClick={() => openAdjust(branch, 'deposit')} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-500/20 transition-all text-xs tracking-tight">إيداع</button>
+                <button onClick={() => openAdjust(branch, 'withdraw')} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-xl border border-white/5 transition-all text-xs tracking-tight">سحب</button>
               </div>
             </div>
           </motion.div>
         ))}
       </div>
+
+      <AnimatePresence>
+        {isAdjustOpen && selectedBranch && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsAdjustOpen(false)} className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[80]" />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-x-4 top-[15%] md:mx-auto max-w-md bg-slate-900 border border-white/10 rounded-3xl shadow-2xl z-[90] overflow-hidden">
+              <div className="p-6 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
+                <h3 className="font-bold text-white text-sm">{adjustType === 'deposit' ? 'إيداع رصيد' : 'سحب رصيد'} — {selectedBranch.name}</h3>
+                <button onClick={() => setIsAdjustOpen(false)} className="p-2 hover:bg-white/5 rounded-xl text-slate-400">✕</button>
+              </div>
+              <form onSubmit={handleAdjust} className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">العملة</label>
+                    <select className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm outline-none" value={adjustCurrency} onChange={e => setAdjustCurrency(e.target.value)}>
+                      {currencies.filter(c => c.isActive).map(c => (
+                        <option key={c.id} className="bg-slate-900" value={c.code}>{c.code}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">المبلغ</label>
+                    <input required type="number" step="any" min="0.01" className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm outline-none" value={adjustAmount || ''} onChange={e => setAdjustAmount(Number(e.target.value))} />
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setIsAdjustOpen(false)} className="flex-1 py-3 rounded-xl bg-white/5 text-slate-400 font-bold border border-white/5">إلغاء</button>
+                  <button type="submit" className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg ${adjustType === 'deposit' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/20' : 'bg-rose-600 hover:bg-rose-500 shadow-rose-500/20'}`}>{adjustType === 'deposit' ? 'تأكيد الإيداع' : 'تأكيد السحب'}</button>
+                </div>
+                <p className="text-[10px] text-slate-500 text-center">سيتم تسجيل العملية في سجل التدقيق</p>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

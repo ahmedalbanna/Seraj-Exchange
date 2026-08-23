@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useConfig } from '../components/ConfigProvider';
 import { useAuth } from '../components/AuthProvider';
-import { collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { ExchangeRate } from '../types';
 import { TrendingUp, Plus, Clock, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
 import { currencyService } from '../services/currencyService';
+import { exchangeRateService } from '../services/exchangeRateService';
 import { Currency } from '../types';
 
 export default function ExchangeRates() {
@@ -28,11 +27,10 @@ export default function ExchangeRates() {
   });
 
   useEffect(() => {
-    const q = query(collection(db, 'exchange_rates'), orderBy('date', 'desc'), limit(20));
-    const unsubscribeRates = onSnapshot(q, (snap) => {
-      setRates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ExchangeRate)));
+    const unsubscribeRates = exchangeRateService.subscribeToRates((data) => {
+      setRates(data);
       setLoading(false);
-    });
+    }, 20);
     
     const unsubscribeCurrencies = currencyService.subscribeToCurrencies(setCurrencies);
     
@@ -47,10 +45,9 @@ export default function ExchangeRates() {
     if (!profile) return;
     
     try {
-      await addDoc(collection(db, 'exchange_rates'), {
+      await exchangeRateService.addRate({
         ...newRate,
         updatedBy: profile.uid,
-        date: serverTimestamp(),
       });
       setNewRate({ baseCurrency: currencies[0]?.code || 'USD', targetCurrency: currencies[1]?.code || 'YER', officialRate: 0, marketRate: 0 });
     } catch (err) {

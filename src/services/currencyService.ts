@@ -1,6 +1,7 @@
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Currency } from '../types';
+import { handleFirestoreError } from './errorService';
 
 export const currencyService = {
   subscribeToCurrencies: (callback: (currencies: Currency[]) => void) => {
@@ -11,20 +12,42 @@ export const currencyService = {
         ...doc.data()
       })) as Currency[];
       callback(currencies);
+    }, (error) => {
+      console.error("Error subscribing to currencies", error);
     });
   },
 
   addCurrency: async (currency: Omit<Currency, 'id'>) => {
-    await addDoc(collection(db, 'currencies'), currency);
+    if (!currency.code || currency.code.length < 3) throw new Error("Currency code must be >=3 chars");
+    if (!currency.name) throw new Error("Currency name required");
+    if (!currency.symbol) throw new Error("Currency symbol required");
+    try {
+      await addDoc(collection(db, 'currencies'), {
+        code: currency.code.toUpperCase(),
+        name: currency.name,
+        symbol: currency.symbol,
+        isActive: currency.isActive ?? true,
+      });
+    } catch (error) {
+      handleFirestoreError(error, 'create', 'currencies');
+    }
   },
 
   updateCurrency: async (id: string, updates: Partial<Currency>) => {
-    const docRef = doc(db, 'currencies', id);
-    await updateDoc(docRef, updates);
+    try {
+      const docRef = doc(db, 'currencies', id);
+      await updateDoc(docRef, updates);
+    } catch (error) {
+      handleFirestoreError(error, 'update', `currencies/${id}`);
+    }
   },
 
   deleteCurrency: async (id: string) => {
-    const docRef = doc(db, 'currencies', id);
-    await deleteDoc(docRef);
+    try {
+      const docRef = doc(db, 'currencies', id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      handleFirestoreError(error, 'delete', `currencies/${id}`);
+    }
   }
 };
