@@ -96,26 +96,39 @@ export default function Transfers() {
 
   const handleFinalCreate = async () => {
     if (!profile) return;
-    
-    await transferService.create({
-      ...newTransfer as Omit<Transfer, 'issuedAt' | 'issuedBy' | 'status' | 'id'>,
-      fromBranchId: profile.branchId || 'main',
-      totalAmount: (newTransfer.amount || 0) * (newTransfer.exchangeRate || 1),
-    }, profile.uid);
-
-    // Notify receiving branch managers
-    if (newTransfer.toBranchId) {
-      notificationService.sendToBranchManagers(newTransfer.toBranchId, {
-        title: 'حوالة واردة جديدة',
-        message: `تم إرسال حوالة جديدة بمبلغ ${newTransfer.amount} ${newTransfer.currency} من فرع ${branches.find(b => b.id === profile.branchId)?.name || 'المركز'}`,
-        type: 'info',
-        link: '/transfers'
-      });
+    if (!profile.branchId) {
+      console.error("Cannot create transfer: user has no branch assigned. Ask administrator to assign via Users page.");
+      return;
     }
+    
+    try {
+      const id = await transferService.create({
+        ...newTransfer as Omit<Transfer, 'issuedAt' | 'issuedBy' | 'status' | 'id'>,
+        fromBranchId: profile.branchId,
+        totalAmount: (newTransfer.amount || 0) * (newTransfer.exchangeRate || 1),
+      }, profile.uid);
 
-    setIsModalOpen(false);
-    setIsConfirmOpen(false);
-    setNewTransfer({ currency: 'USD', amount: 0, exchangeRate: 1 });
+      if (!id) {
+        console.error("Transfer creation failed");
+        return;
+      }
+
+      // Notify receiving branch managers — fire-and-forget, log on failure
+      if (newTransfer.toBranchId) {
+        notificationService.sendToBranchManagers(newTransfer.toBranchId, {
+          title: 'حوالة واردة جديدة',
+          message: `تم إرسال حوالة جديدة بمبلغ ${newTransfer.amount} ${newTransfer.currency} من فرع ${branches.find(b => b.id === profile.branchId)?.name || 'المركز'}`,
+          type: 'info',
+          link: '/transfers'
+        }).catch(e => console.error("Notification send failed", e));
+      }
+
+      setIsModalOpen(false);
+      setIsConfirmOpen(false);
+      setNewTransfer({ currency: 'USD', amount: 0, exchangeRate: 1 });
+    } catch (err) {
+      console.error("Transfer creation error", err);
+    }
   };
 
   const openReceiveModal = (transfer: Transfer) => {
@@ -131,9 +144,14 @@ export default function Transfers() {
   const handleReceive = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile || !selectedTransferForReceive) return;
-    await transferService.receive(selectedTransferForReceive.id!, profile.uid, selectedTransferForReceive, receiveDetails);
-    setIsReceiveModalOpen(false);
-    setSelectedTransferForReceive(null);
+    try {
+      await transferService.receive(selectedTransferForReceive.id!, profile.uid, selectedTransferForReceive, receiveDetails);
+      setIsReceiveModalOpen(false);
+      setSelectedTransferForReceive(null);
+    } catch (err) {
+      console.error("Receive failed", err);
+      // Keep modal open so user can retry; error is surfaced via handleFirestoreError toast if configured
+    }
   };
 
   const StatusBadge = ({ status }: { status: string }) => {
@@ -160,12 +178,20 @@ export default function Transfers() {
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+          disabled={!profile?.branchId}
+          title={!profile?.branchId ? "يجب تعيين فرع لحسابك من قبل المدير قبل إنشاء الحوالات" : undefined}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
         >
           <Plus className="w-5 h-5" />
           {t('add_transfer')}
         </button>
       </div>
+
+      {!profile?.branchId && (
+        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl p-4 text-sm flex items-center gap-3">
+          <span className="font-bold">تنبيه:</span> حسابك غير مرتبط بأي فرع. لا يمكنك إنشاء حوالات حتى يقوم المدير بتعيينك إلى فرع عبر صفحة "المخدمين".
+        </div>
+      )}
 
       <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-4 border-b border-white/5 flex flex-col md:flex-row gap-4 items-center">

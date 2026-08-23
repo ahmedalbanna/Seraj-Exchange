@@ -36,35 +36,49 @@ export default function Dashboard() {
       setLoading(true);
       try {
         const transfersRef = collection(db, 'transfers');
-        let q;
-        
+
+        let allTransfers: Transfer[] = [];
+
         if (isAdministrator || isSupervisor) {
-          q = query(transfersRef, orderBy('issuedAt', 'desc'), limit(5));
+          const q = query(transfersRef, orderBy('issuedAt', 'desc'), limit(100));
+          const snap = await getDocs(q);
+          allTransfers = snap.docs.map(d => ({ id: d.id, ...(d.data() as object) } as Transfer));
         } else if (profile.branchId) {
-          q = query(
-            transfersRef, 
-            where('fromBranchId', '==', profile.branchId), 
-            orderBy('issuedAt', 'desc'), 
-            limit(5)
-          );
+          const qFrom = query(transfersRef, where('fromBranchId', '==', profile.branchId), orderBy('issuedAt', 'desc'), limit(50));
+          const qTo = query(transfersRef, where('toBranchId', '==', profile.branchId), orderBy('issuedAt', 'desc'), limit(50));
+          const [snapFrom, snapTo] = await Promise.all([
+            getDocs(qFrom).catch(e => { console.error("Dashboard fromBranch query failed (missing index?)", e); return { docs: [] as any[] } as any; }),
+            getDocs(qTo).catch(e => { console.error("Dashboard toBranch query failed (missing index for toBranchId+issuedAt)", e); return { docs: [] as any[] } as any; })
+          ]);
+          const from = snapFrom.docs.map((d: any) => ({ id: d.id, ...(d.data() as object) } as Transfer));
+          const to = snapTo.docs.map((d: any) => ({ id: d.id, ...(d.data() as object) } as Transfer));
+          const map = new Map<string, Transfer>();
+          [...from, ...to].forEach(t => { if (t.id) map.set(t.id, t); });
+          allTransfers = Array.from(map.values()).sort((a,b) => (b.issuedAt?.toMillis?.() ?? 0) - (a.issuedAt?.toMillis?.() ?? 0));
         } else {
-          // No branch assigned and not admin, show nothing or specific branchless data
           setRecentTransfers([]);
+          setStats({ total_sent: 0, total_received: 0, pending: 0, daily_avg: 0 });
           setLoading(false);
           return;
         }
 
-        const querySnapshot = await getDocs(q);
-        const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Transfer));
-        setRecentTransfers(fetched);
+        // Recent 5 for UI
+        setRecentTransfers(allTransfers.slice(0, 5));
 
-        // In a real app, these would be aggregations or from a summary doc
-        setStats({
-          total_sent: 125430,
-          total_received: 85200,
-          pending: 12,
-          daily_avg: 18500
-        });
+        // Compute stats from fetched window (real app would use aggregation doc/Cloud Function)
+        const pending = allTransfers.filter(t => t.status === 'pending').length;
+        let total_sent = 0;
+        let total_received = 0;
+        if (isAdministrator || isSupervisor) {
+          total_sent = allTransfers.reduce((s,t) => s + (t.amount || 0), 0);
+          total_received = allTransfers.filter(t => t.status === 'received').reduce((s,t) => s + (t.amount || 0), 0);
+        } else {
+          total_sent = allTransfers.filter(t => t.fromBranchId === profile.branchId).reduce((s,t) => s + (t.amount || 0), 0);
+          total_received = allTransfers.filter(t => t.toBranchId === profile.branchId && t.status === 'received').reduce((s,t) => s + (t.amount || 0), 0);
+        }
+        const daily_avg = total_sent ? Math.round(total_sent / 30) : 0;
+
+        setStats({ total_sent, total_received, pending, daily_avg });
       } catch (error) {
         console.error("Error fetching dashboard data", error);
       } finally {

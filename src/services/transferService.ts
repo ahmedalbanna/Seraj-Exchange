@@ -152,25 +152,71 @@ export const transferService = {
   subscribeToBranchTransfers: (branchId: string, isAdministrator: boolean, isSupervisor: boolean, callback: (transfers: Transfer[]) => void) => {
     const transfersRef = collection(db, 'transfers');
     
-    let q;
     if (isAdministrator || isSupervisor) {
-      q = query(transfersRef, orderBy('issuedAt', 'desc'));
-    } else {
-      q = query(
-        transfersRef, 
-        where('fromBranchId', '==', branchId), 
-        orderBy('issuedAt', 'desc')
-      );
+      const q = query(transfersRef, orderBy('issuedAt', 'desc'));
+      return onSnapshot(q, (snapshot) => {
+        const transfers = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Transfer));
+        callback(transfers);
+      }, (error) => {
+        console.error("Error subscribing to transfers", error);
+      });
     }
 
-    return onSnapshot(q, (snapshot) => {
-      const transfers = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Transfer));
-      callback(transfers);
+    // Teller: merge inbound + outbound (Firestore has no OR across fields)
+    if (!branchId) {
+      callback([]);
+      return () => {};
+    }
+
+    const qFrom = query(transfersRef, where('fromBranchId', '==', branchId), orderBy('issuedAt', 'desc'));
+    const qTo = query(transfersRef, where('toBranchId', '==', branchId), orderBy('issuedAt', 'desc'));
+
+    let fromTransfers: Transfer[] = [];
+    let toTransfers: Transfer[] = [];
+    let fromLoaded = false;
+    let toLoaded = false;
+
+    const emit = () => {
+      if (!fromLoaded || !toLoaded) return;
+      const map = new Map<string, Transfer>();
+      [...fromTransfers, ...toTransfers].forEach(t => {
+        if (t.id) map.set(t.id, t);
+      });
+      const merged = Array.from(map.values()).sort((a, b) => {
+        const aTime = a.issuedAt?.toMillis?.() ?? 0;
+        const bTime = b.issuedAt?.toMillis?.() ?? 0;
+        return bTime - aTime;
+      });
+      callback(merged);
+    };
+
+    const unsubFrom = onSnapshot(qFrom, (snap) => {
+      fromTransfers = snap.docs.map(d => ({ id: d.id, ...d.data() } as Transfer));
+      fromLoaded = true;
+      emit();
     }, (error) => {
-      console.error("Error subscribing to transfers", error);
+      console.error("Error subscribing to outbound transfers", error);
+      fromLoaded = true;
+      emit();
     });
+
+    const unsubTo = onSnapshot(qTo, (snap) => {
+      toTransfers = snap.docs.map(d => ({ id: d.id, ...d.data() } as Transfer));
+      toLoaded = true;
+      emit();
+    }, (error) => {
+      // Missing composite index (toBranchId + issuedAt) will surface here
+      console.error("Error subscribing to inbound transfers (check Firestore index for toBranchId+issuedAt)", error);
+      toLoaded = true;
+      emit();
+    });
+
+    return () => {
+      unsubFrom();
+      unsubTo();
+    };
   }
 };

@@ -3,6 +3,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile, UserRole } from '../types';
+import { seedInitialData } from '../lib/seed';
 
 interface AuthContextType {
   user: User | null;
@@ -60,14 +61,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: (role as UserRole) || 'Teller',
             branchId: data.branchId
           });
+          // Trigger seed if admin and branches empty (idempotent)
+          if (role === 'Administrator') {
+            seedInitialData().catch(e => console.error("Seed on admin login failed", e));
+          }
         } else {
-          // Self-register as Teller if no profile exists
+          // Self-register as Teller if no profile exists — branch unassigned until admin assigns
           const newProfile: UserProfile = {
             uid: user.uid,
             email: user.email!,
             displayName: user.displayName,
             role: 'Teller',
-            branchId: 'main' // Default to main branch to avoid undefined errors
+            branchId: '' // Empty until administrator assigns a real branch (see seed creates 'main')
           };
           await setDoc(profileRef, newProfile);
           setProfile(newProfile);

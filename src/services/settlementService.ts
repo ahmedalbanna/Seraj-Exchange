@@ -15,11 +15,32 @@ import { handleFirestoreError } from './errorService';
 export const settlementService = {
   createSettlement: async (settlement: Omit<Settlement, 'settledAt' | 'status'>, userId: string) => {
     try {
+      // Link outstanding transfers if caller didn't provide IDs (Phase 1.2: populate gap)
+      let transferIds = settlement.transferIds;
+      if (!transferIds || transferIds.length === 0) {
+        try {
+          const q = query(
+            collection(db, 'transfers'),
+            where('fromBranchId', '==', settlement.fromBranchId),
+            where('toBranchId', '==', settlement.toBranchId),
+            where('status', 'in', ['pending', 'processing'])
+          );
+          const snap = await getDocs(q);
+          transferIds = snap.docs
+            .filter(d => (d.data() as Transfer).currency === settlement.currency)
+            .map(d => d.id);
+        } catch (e) {
+          console.warn("Failed to auto-link transfers for settlement", e);
+          transferIds = [];
+        }
+      }
+
       const batch = writeBatch(db);
       
       const settlementRef = doc(collection(db, 'settlements'));
       batch.set(settlementRef, {
         ...settlement,
+        transferIds,
         status: 'completed',
         settledAt: serverTimestamp(),
       });
@@ -36,6 +57,7 @@ export const settlementService = {
           fromBranchId: settlement.fromBranchId,
           toBranchId: settlement.toBranchId,
           settledAmount: settlement.settledAmount,
+          transferCount: transferIds.length,
         },
         userId,
         timestamp: serverTimestamp(),
