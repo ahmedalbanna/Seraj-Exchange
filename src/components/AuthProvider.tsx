@@ -83,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const isAdministrator = profile?.role === 'Administrator';
-  const isSupervisor = profile?.role === 'Supervisor';
+  const isSupervisor = profile?.role === 'Supervisor' || profile?.role === 'Administrator';
   const isTeller = profile?.role === 'Teller';
 
   return (

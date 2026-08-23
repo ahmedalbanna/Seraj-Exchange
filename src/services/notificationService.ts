@@ -92,7 +92,7 @@ export const notificationService = {
       const usersQ = query(
         collection(db, 'users'), 
         where('branchId', '==', branchId),
-        where('role', 'in', ['manager', 'admin'])
+        where('role', 'in', ['Supervisor', 'Administrator'])
       );
       const usersSnap = await getDocs(usersQ);
       const batch = writeBatch(db);

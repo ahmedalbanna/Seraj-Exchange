@@ -1,14 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // --- Helpers ---
     function isSignedIn() { return request.auth != null; }
-    function isVerified() { return isSignedIn(); } // Relaxed for development stability
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
     function getUserData() { 
       return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ?
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data :
@@ -27,8 +22,9 @@ service cloud.firestore {
     // --- Validation Blueprints ---
     function isValidExchangeRate(data) {
       return data.keys().hasAll(['baseCurrency', 'targetCurrency', 'officialRate', 'marketRate', 'date', 'updatedBy'])
-        && data.baseCurrency is string && data.baseCurrency.size() >= 3 && data.baseCurrency.size() <= 6
-        && data.targetCurrency is string && data.targetCurrency.size() >= 3 && data.targetCurrency.size() <= 6
+        && data.keys().size() == 6
+        && data.baseCurrency is string && data.baseCurrency.size() == 3
+        && data.targetCurrency is string && data.targetCurrency.size() == 3
         && data.officialRate is number && data.officialRate > 0
         && data.marketRate is number && data.marketRate > 0
         && data.updatedBy == request.auth.uid
@@ -37,64 +33,109 @@ service cloud.firestore {
 
     function isValidTransferBase(data) {
       return data.keys().hasAll(['senderName', 'senderPhone', 'receiverName', 'receiverPhone', 'amount', 'currency', 'exchangeRate', 'totalAmount', 'fromBranchId', 'toBranchId', 'status', 'issuedAt', 'issuedBy'])
-        && data.senderName is string && data.senderName.size() > 0
-        && data.receiverName is string && data.receiverName.size() > 0
+        && data.keys().size() == 13
+        && data.senderName is string && data.senderName.size() > 0 && data.senderName.size() < 100
+        && data.senderPhone is string && data.senderPhone.size() > 0
+        && data.receiverName is string && data.receiverName.size() > 0 && data.receiverName.size() < 100
+        && data.receiverPhone is string && data.receiverPhone.size() > 0
         && data.amount is number && data.amount > 0
         && data.currency is string && data.currency.size() >= 3
         && data.exchangeRate is number && data.exchangeRate > 0
-        && data.totalAmount is number
+        && data.totalAmount is number && data.totalAmount > 0
         && data.status in ['pending', 'processing', 'received', 'failed', 'cancelled']
         && isValidId(data.fromBranchId)
         && isValidId(data.toBranchId);
     }
 
+    function isValidSettlement(data) {
+      return data.keys().hasAll(['fromBranchId', 'toBranchId', 'currency', 'amount', 'appliedRate', 'settledAmount', 'settledBy', 'transferIds', 'status', 'settledAt'])
+        && data.keys().size() == 10
+        && isValidId(data.fromBranchId)
+        && isValidId(data.toBranchId)
+        && data.currency is string && data.currency.size() >= 3
+        && data.amount is number && data.amount > 0
+        && data.appliedRate is number && data.appliedRate > 0
+        && data.settledAmount is number && data.settledAmount >= 0
+        && data.settledBy == request.auth.uid
+        && data.status == 'completed'
+        && data.settledAt == request.time;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'title', 'message', 'type', 'read', 'createdAt'])
+        && data.keys().size() == 6
+        && data.userId is string && data.userId.size() > 0
+        && data.title is string && data.title.size() > 0
+        && data.message is string && data.message.size() > 0
+        && data.type in ['info', 'success', 'warning', 'error']
+        && data.read == false
+        && data.createdAt == request.time
+        && exists(/databases/$(database)/documents/users/$(data.userId));
+    }
+
     // --- Collection Rules ---
 
     match /settlements/{settlementId} {
-      allow read, create: if isAdministrator() || isSupervisor();
+      allow read: if isVerified() && isValidId(settlementId) && (isAdministrator() || isSupervisor());
+      allow create: if isVerified() && isValidId(settlementId) && (isAdministrator() || isSupervisor()) && isValidSettlement(incoming());
+      allow update, delete: if false;
     }
 
     match /notifications/{notificationId} {
-      allow read, update, delete: if isVerified() && resource.data.userId == request.auth.uid;
-      allow create: if isVerified(); 
+      allow read: if isVerified() && isValidId(notificationId) && resource.data.userId == request.auth.uid;
+      allow update: if isVerified() && isValidId(notificationId) && resource.data.userId == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isVerified() && isValidId(notificationId) && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidId(notificationId) && isValidNotification(incoming());
     }
 
     match /users/{userId} {
-      allow get: if isVerified() && (request.auth.uid == userId || isAdministrator());
+      allow get: if isVerified() && isValidId(userId) && (request.auth.uid == userId || isAdministrator());
       allow list: if isAdministrator();
-      allow create: if isVerified() && userId == request.auth.uid 
+      allow create: if isVerified() && isValidId(userId) && userId == request.auth.uid 
         && incoming().role == 'Teller'
-        && incoming().email == request.auth.token.email;
-      allow update: if isVerified() && (
-        (isAdministrator() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'branchId'])) ||
-        (userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role']))
+        && incoming().email == request.auth.token.email
+        && incoming().keys().hasAll(['uid', 'email', 'displayName', 'role', 'branchId'])
+        && incoming().keys().size() == 5;
+      allow update: if isVerified() && isValidId(userId) && (
+        (isAdministrator() 
+          && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'branchId'])
+          && incoming().role in ['Administrator', 'Supervisor', 'Teller']
+          && (incoming().branchId == '' || isValidId(incoming().branchId))) ||
+        (userId == request.auth.uid 
+          && incoming().diff(existing()).affectedKeys().hasOnly(['displayName']))
       );
     }
 
     match /currencies/{currencyId} {
-      allow read: if isVerified();
-      allow write: if isAdministrator() || isSupervisor();
+      allow read: if isVerified() && isValidId(currencyId);
+      allow create: if isVerified() && isValidId(currencyId) && (isAdministrator() || isSupervisor());
+      allow update: if isVerified() && isValidId(currencyId) && (isAdministrator() || isSupervisor());
+      allow delete: if isVerified() && isValidId(currencyId) && (isAdministrator() || isSupervisor());
     }
 
     match /audit_logs/{logId} {
-      allow read: if isAdministrator() || isSupervisor();
-      // Allow creation during batch writes
-      allow create: if isVerified() && incoming().userId == request.auth.uid;
+      allow read: if isVerified() && isValidId(logId) && (isAdministrator() || isSupervisor());
+      // Allow creation during batch writes — enforce owner and server timestamp
+      allow create: if isVerified() && isValidId(logId) && incoming().userId == request.auth.uid && incoming().timestamp == request.time;
       allow update, delete: if false; // Immutable
     }
 
     match /exchange_rates/{rateId} {
-      allow read: if isVerified();
-      allow create: if isSupervisor() && isValidExchangeRate(incoming());
+      allow read: if isVerified() && isValidId(rateId);
+      allow create: if isVerified() && isValidId(rateId) && isSupervisor() && isValidExchangeRate(incoming());
+      allow update, delete: if false; // Rates are historical/immutable
     }
 
     match /branches/{branchId} {
-      allow read: if isVerified();
-      allow write: if isAdministrator();
+      allow read: if isVerified() && isValidId(branchId);
+      allow create: if isVerified() && isValidId(branchId) && isAdministrator();
+      allow update: if isVerified() && isValidId(branchId) && isAdministrator();
+      allow delete: if false;
     }
 
     match /transfers/{transferId} {
-      allow get: if isVerified() && (
+      allow get: if isVerified() && isValidId(transferId) && (
         isAdministrator() ||
         isSupervisor() ||
         getUserData().get('branchId', '') == existing().fromBranchId ||
@@ -108,31 +149,34 @@ service cloud.firestore {
         (resource.data.toBranchId == getUserData().get('branchId', 'none'))
       );
       
-      allow create: if isVerified() && isValidTransferBase(incoming())
+      allow create: if isVerified() && isValidId(transferId) && isValidTransferBase(incoming())
         && incoming().status == 'pending'
         && incoming().issuedBy == request.auth.uid
         && incoming().issuedAt == request.time
         && (isAdministrator() || isSupervisor() || getUserData().get('branchId', '') == incoming().fromBranchId)
         && exists(/databases/$(database)/documents/branches/$(incoming().toBranchId));
 
-      allow update: if isVerified() && (
-        // Action: Receive (Supervisor can approve/receive, Teller could maybe too if at branch)
+      allow update: if isVerified() && isValidId(transferId) && (
+        // Action: Receive — only receiver branch can mark received
         (
           existing().status == 'pending' &&
           incoming().status == 'received' &&
           getUserData().get('branchId', '') == existing().toBranchId &&
           incoming().receivedBy == request.auth.uid &&
           incoming().receivedAt == request.time &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'receivedBy', 'receivedAt'])
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'receivedBy', 'receivedAt', 'receiverIdType', 'receiverIdNumber', 'notes']) &&
+          (!('receiverIdType' in incoming()) || incoming().receiverIdType in ['nationalId', 'passport', 'familyCard', 'other']) &&
+          (!('receiverIdNumber' in incoming()) || (incoming().receiverIdNumber is string && incoming().receiverIdNumber.size() > 0)) &&
+          (!('notes' in incoming()) || incoming().notes is string)
         ) ||
-        // Action: Cancel
+        // Action: Cancel — only sender branch can cancel before received
         (
           existing().status == 'pending' &&
           incoming().status == 'cancelled' &&
           getUserData().get('branchId', '') == existing().fromBranchId &&
           incoming().diff(existing()).affectedKeys().hasOnly(['status'])
         ) ||
-        // Action: Process/Fail/Notes
+        // Action: Process/Fail/Notes — sender branch or manager
         (
           incoming().status in ['processing', 'failed', 'pending'] &&
           (isAdministrator() || isSupervisor() || getUserData().get('branchId', '') == existing().fromBranchId) &&
@@ -140,6 +184,11 @@ service cloud.firestore {
           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'expectedReceiptDate'])
         )
       );
+    }
+
+    // 0. Global Safety Net — must be last (OR semantics, deny any unmatched path)
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

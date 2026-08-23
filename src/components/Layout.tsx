@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useConfig } from './ConfigProvider';
 import { useAuth } from './AuthProvider';
-import { auth, db } from '../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { auth } from '../lib/firebase';
 import { 
   LayoutDashboard, 
   ArrowLeftRight, 
@@ -111,23 +110,9 @@ export default function Layout() {
               <p className="text-sm font-semibold text-white truncate">
                 {profile?.displayName || profile?.email}
               </p>
-              <select 
-                className="bg-transparent text-xs text-blue-400 font-bold outline-none cursor-pointer mt-0.5"
-                value={profile?.role || ''}
-                onChange={async (e) => {
-                  if (profile) {
-                    try {
-                      await updateDoc(doc(db, 'users', profile.uid), { role: e.target.value });
-                    } catch (err) {
-                      console.error("Error updating role", err);
-                    }
-                  }
-                }}
-              >
-                <option className="bg-slate-900" value="Administrator">Administrator</option>
-                <option className="bg-slate-900" value="Supervisor">Supervisor</option>
-                <option className="bg-slate-900" value="Teller">Teller</option>
-              </select>
+              <span className="inline-flex items-center text-xs text-blue-400 font-bold mt-1 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20">
+                {profile?.role || '—'}
+              </span>
             </div>
           </div>
           <button 
